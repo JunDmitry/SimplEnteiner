@@ -15,7 +15,8 @@ namespace SimplEnteinerTests.TypeAnalyzesTests
             {
                 ((Type)null).CanResolveAllDependencies(
                     typeof(InjectAttribute),
-                    new Dictionary<Type, Type>());
+                    new Dictionary<Type, Type>(),
+                    t => t);
             });
         }
 
@@ -26,7 +27,8 @@ namespace SimplEnteinerTests.TypeAnalyzesTests
             {
                 typeof(ConcreteNoDependencies).CanResolveAllDependencies(
                     null,
-                    new Dictionary<Type, Type>());
+                    new Dictionary<Type, Type>(),
+                    t => t);
             });
         }
 
@@ -35,9 +37,10 @@ namespace SimplEnteinerTests.TypeAnalyzesTests
         {
             Assert.Throws<ArgumentNullException>(() =>
             {
-                typeof(ConcreteNoDependencies).CanResolveAllDependencies(
+                typeof(ConcreteNoDependencies).CanResolveAllDependencies<Type>(
                     typeof(InjectAttribute),
-                    null);
+                    null,
+                    t => t);
             });
         }
 
@@ -50,7 +53,8 @@ namespace SimplEnteinerTests.TypeAnalyzesTests
             {
                 typeof(CycleClassA).CanResolveAllDependencies(
                     typeof(InjectAttribute),
-                    new Dictionary<Type, Type>());
+                    new Dictionary<Type, Type>(),
+                    t => t);
             });
         }
 
@@ -61,7 +65,8 @@ namespace SimplEnteinerTests.TypeAnalyzesTests
 
             var result = typeof(ConcreteNoDependencies).CanResolveAllDependencies(
                 typeof(InjectAttribute),
-                new Dictionary<Type, Type>());
+                new Dictionary<Type, Type>(),
+                    t => t);
 
             Assert.True(result);
         }
@@ -73,7 +78,8 @@ namespace SimplEnteinerTests.TypeAnalyzesTests
 
             var result = typeof(ConcreteWithConcreteDependency).CanResolveAllDependencies(
                 typeof(InjectAttribute),
-                new Dictionary<Type, Type>());
+                new Dictionary<Type, Type>(),
+                    t => t);
 
             Assert.True(result);
         }
@@ -85,7 +91,8 @@ namespace SimplEnteinerTests.TypeAnalyzesTests
 
             var result = typeof(ConcreteWithUnregisteredInterfaceDependency).CanResolveAllDependencies(
                 typeof(InjectAttribute),
-                new Dictionary<Type, Type>());
+                new Dictionary<Type, Type>(),
+                    t => t);
 
             Assert.False(result);
         }
@@ -102,7 +109,8 @@ namespace SimplEnteinerTests.TypeAnalyzesTests
 
             var result = typeof(ConcreteWithRegisteredInterfaceDependency).CanResolveAllDependencies(
                 typeof(InjectAttribute),
-                registry);
+                registry,
+                    t => t);
 
             Assert.True(result);
         }
@@ -119,7 +127,8 @@ namespace SimplEnteinerTests.TypeAnalyzesTests
 
             var result = typeof(ConcreteWithMultipleDependencies).CanResolveAllDependencies(
                 typeof(InjectAttribute),
-                registry);
+                registry,
+                    t => t);
 
             Assert.True(result);
         }
@@ -131,7 +140,8 @@ namespace SimplEnteinerTests.TypeAnalyzesTests
 
             var result = typeof(ConcreteWithMultipleDependencies).CanResolveAllDependencies(
                 typeof(InjectAttribute),
-                new Dictionary<Type, Type>());
+                new Dictionary<Type, Type>(),
+                    t => t);
 
             // ConcreteNoDependencies and ConcreteWithConcreteDependency are concrete classes
             // ISimpleService is not registered and not concrete (it's an interface)
@@ -149,7 +159,8 @@ namespace SimplEnteinerTests.TypeAnalyzesTests
             var result = typeof(ConcreteWithUnregisteredInterfaceDependency).CanResolveAllDependencies(
                 typeof(InjectAttribute),
                 new Dictionary<Type, Type>(),
-                resolver);
+                resolver,
+                t => t);
 
             // With resolver, ISimpleService maps to SimpleService (concrete)
             // But SimpleService is not in registry, so it should still be false
@@ -165,7 +176,8 @@ namespace SimplEnteinerTests.TypeAnalyzesTests
 
             var result = typeof(ConcreteFromAbstractWithDependency).CanResolveAllDependencies(
                 typeof(InjectAttribute),
-                new Dictionary<Type, Type>());
+                new Dictionary<Type, Type>(),
+                t => t);
 
             // ISimpleService is not registered and not concrete (interface)
             Assert.False(result);

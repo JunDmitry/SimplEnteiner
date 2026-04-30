@@ -1,6 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Text;
 using SimplEnteiner.Core.Binder.Interfaces;
 
 namespace SimplEnteiner.Core.Binder.Implementations

@@ -6,6 +6,7 @@
         { }
 
         protected sealed override void OnExecuteBinding(BindingBuilderInternal bindingBuilderInternal)
-        { }
+        {
+        }
     }
 }

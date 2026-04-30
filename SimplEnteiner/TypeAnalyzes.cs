@@ -15,7 +15,6 @@ namespace SimplEnteiner
     /// </summary>
     public static partial class TypeAnalyzes
     {
-        private static readonly Type s_generatedTypeAttribute = typeof(CompilerGeneratedAttribute);
         private static readonly ConcurrentDictionary<Type, ConcurrentDictionary<Type, ConstructorInfo>> s_injectableConstructorsCache
             = new ConcurrentDictionary<Type, ConcurrentDictionary<Type, ConstructorInfo>>();
         private static readonly object s_lock = new object();
@@ -630,9 +629,10 @@ namespace SimplEnteiner
         /// <returns>true if can resolve <paramref name="type"/> dependencies with <paramref name="dependencyRegistryMap"/> otherwise false</returns>
         /// <exception cref="ArgumentNullException">If <paramref name="type"/>, <paramref name="injectAttribute"/> or <paramref name="dependencyRegistryMap"/> is null</exception>
         /// <exception cref="CircularDependencyException">If cyclical dependency has been detected</exception>
-        public static bool CanResolveAllDependencies(this Type type, 
+        public static bool CanResolveAllDependencies<T>(this Type type, 
             Type injectAttribute, 
-            IReadOnlyDictionary<Type, Type> dependencyRegistryMap, 
+            IReadOnlyDictionary<Type, T> dependencyRegistryMap,
+            Func<T, Type> selector,
             Func<Type, Type> resolver = null)
         {
             if (dependencyRegistryMap == null)

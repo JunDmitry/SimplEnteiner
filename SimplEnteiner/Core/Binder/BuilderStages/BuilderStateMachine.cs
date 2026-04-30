@@ -51,5 +51,14 @@ namespace SimplEnteiner.Core.Binder.BuilderStages
                 _currentStage = _stages[typeof(TStage)];
             }
         }
+
+        internal bool CurrentIs<T>()
+            where T : Stage
+        {
+            lock (_lock)
+            {
+                return _currentStage is T;
+            }
+        }
     }
 }

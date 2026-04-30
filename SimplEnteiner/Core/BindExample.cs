@@ -1,6 +1,7 @@
-﻿using SimplEnteiner.Core.Binder.Implementations;
+﻿using System;
+using SimplEnteiner.Core.Binder.Implementations;
 using SimplEnteiner.Core.Binder.Interfaces;
-using SimplEnteiner.Core.Registration;
+using SimplEnteiner.Core.RegistrationService;
 
 namespace SimplEnteiner.Core
 {
@@ -33,6 +34,13 @@ namespace SimplEnteiner.Core
                 .Bind<BindingOptions>()
                 .ToSelf()
                 .AsTransient()
+                .Apply();
+
+            // Invalid version
+            container
+                .Bind<IBindingOptions>()
+                .ToSelf()
+                .AsCached()
                 .Apply();
         }
     }

@@ -320,7 +320,7 @@ namespace SimplEnteinerTests.TypeAnalyzesTests
 
             // Check if all dependencies can be resolved
             var canResolve = typeof(ConcreteWithRegisteredInterfaceDependency)
-                .CanResolveAllDependencies(typeof(InjectAttribute), registry);
+                .CanResolveAllDependencies(typeof(InjectAttribute), registry, t => t);
 
             Assert.True(canResolve);
             Assert.Contains(typeof(ISimpleService), dependencies);

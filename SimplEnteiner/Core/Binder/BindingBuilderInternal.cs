@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using SimplEnteiner.Core.Binder.BuilderStages;
 using SimplEnteiner.Core.LifeScope;
+using SimplEnteiner.Utilities;
 
 namespace SimplEnteiner.Core.Binder
 {
@@ -11,7 +12,7 @@ namespace SimplEnteiner.Core.Binder
 
         public BindingBuilderInternal(Type interfaceType)
         {
-            InterfaceType = interfaceType ?? throw new ArgumentNullException(nameof(interfaceType));
+            InterfaceType = interfaceType.ThrowIfArgumentNull();
 
             _state = CreateAndConfigureStateMachine();
         }
@@ -24,12 +25,14 @@ namespace SimplEnteiner.Core.Binder
         public List<object> Arguments { get; } = new List<object>();
         public Type ConditionType { get; private set; }
         public object Id { get; private set; }
+        public bool IsComplete => _state.CurrentIs<FinalStage>();
+        public bool IsRegistered { get; private set; }
 
         public void SetImplementation(Type implementation)
         {
             ThrowIfCantTransit<ImplementationStage>("Implementation");
 
-            ImplementationType = implementation ?? throw new ArgumentNullException(nameof(implementation));
+            ImplementationType = implementation.ThrowIfArgumentNull();
             _state.ChangeTo<ImplementationStage>();
         }
 
@@ -37,7 +40,7 @@ namespace SimplEnteiner.Core.Binder
         {
             ThrowIfCantTransit<ImplementationStage>("Implementation");
 
-            FactoryMethod = factory ?? throw new ArgumentNullException(nameof(factory));
+            FactoryMethod = factory.ThrowIfArgumentNull();
             _state.ChangeTo<ImplementationStage>();
         }
 
@@ -45,7 +48,7 @@ namespace SimplEnteiner.Core.Binder
         {
             ThrowIfCantTransit<ImplementationStage>("Implementation");
 
-            Instance = instance ?? throw new ArgumentNullException(nameof(instance));
+            Instance = instance.ThrowIfArgumentNull();
             _state.ChangeTo<ImplementationStage>();
         }
 
@@ -77,8 +80,18 @@ namespace SimplEnteiner.Core.Binder
             if (_state.CanTransit<ImplementationStage>())
                 _state.ExecuteTo<ImplementationStage>();
 
-            Id = id ?? throw new ArgumentNullException(nameof(id));
+            Id = id.ThrowIfArgumentNull();
             _state.ChangeTo<OptionsStage>();
+        }
+
+        internal void ExecuteAllStages()
+        {
+            _state.ExecuteTo<FinalStage>();
+        }
+
+        internal void MarkRegistered()
+        {
+            IsRegistered = true;
         }
 
         private BuilderStateMachine CreateAndConfigureStateMachine()
@@ -93,7 +106,7 @@ namespace SimplEnteiner.Core.Binder
             {
                 initialStage, implementationStage, lifetimeStage,
                 optionsStage, finalStage
-            }, 
+            },
             typeof(InitialStage));
         }
 
