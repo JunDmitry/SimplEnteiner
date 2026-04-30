@@ -48,6 +48,21 @@ namespace SimplEnteiner.Core.RegistrationService
             //    throw new InvalidOperationException($"Cannot resolve all dependencies of {builder.InterfaceType} with current registrations.");
         }
 
+        internal void AddExactRegistration(Type interfaceType, Registration registration)
+        {
+            _exactBindings[interfaceType] = registration;
+        }
+
+        internal void AddOpenGenericRegistration(Type interfaceType, Registration registration)
+        {
+            _openGenericBindings[interfaceType] = registration;
+        }
+
+        internal void AddConditionalRegistration(Type interfaceType, object id, Registration registration)
+        {
+            _conditionalBindings[(interfaceType, id)] = registration;
+        }
+
         internal bool CanResolveGeneric(Type interfaceType)
         {
             return _exactBindings.ContainsKey(interfaceType)

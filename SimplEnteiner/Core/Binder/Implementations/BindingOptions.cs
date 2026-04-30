@@ -6,9 +6,9 @@ namespace SimplEnteiner.Core.Binder.Implementations
     internal class BindingOptions<TInterface> : IBindingOptions<TInterface>
     {
         private readonly BindingBuilderInternal _bindingBuilderInternal;
-        private readonly DIContainer _container;
+        private readonly IBindingTarget _container;
 
-        public BindingOptions(BindingBuilderInternal bindingBuilderInternal, DIContainer container)
+        public BindingOptions(BindingBuilderInternal bindingBuilderInternal, IBindingTarget container)
         {
             _bindingBuilderInternal = bindingBuilderInternal;
             _container = container;
@@ -44,9 +44,9 @@ namespace SimplEnteiner.Core.Binder.Implementations
     internal class BindingOptions : IBindingOptions
     {
         private readonly BindingBuilderInternal _bindingBuilderInternal;
-        private readonly DIContainer _container;
+        private readonly IBindingTarget _container;
 
-        public BindingOptions(BindingBuilderInternal bindingBuilderInternal, DIContainer container)
+        public BindingOptions(BindingBuilderInternal bindingBuilderInternal, IBindingTarget container)
         {
             _bindingBuilderInternal = bindingBuilderInternal;
             _container = container;

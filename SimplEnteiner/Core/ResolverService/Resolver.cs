@@ -14,13 +14,6 @@ namespace SimplEnteiner.Core.ResolverService
     {
         private static readonly Type s_injectAttributeType = Constants.InjectAttributeType;
 
-        private readonly Registry _registry;
-
-        public Resolver(Registry registry)
-        {
-            _registry = registry;
-        }
-
         public T Resolve<T>(Scope scope) => (T)Resolve(typeof(T), scope);
 
         public object Resolve(Type interfaceType, Scope scope)
@@ -56,7 +49,7 @@ namespace SimplEnteiner.Core.ResolverService
             }
             else
             {
-                Registration registration = GetRegistration(interfaceType).ThrowInvalidIfNull($"No binding found for {interfaceType}");
+                Registration registration = GetRegistration(interfaceType, context.CurrentScope).ThrowInvalidIfNull($"No binding found for {interfaceType}");
                 instance = ResolveRegistration(registration, interfaceType, context);
             }
 
@@ -68,7 +61,7 @@ namespace SimplEnteiner.Core.ResolverService
             Type instanceType = typeof(List<>).MakeGenericType(elementType);
             IList list = (IList)Activator.CreateInstance(instanceType);
 
-            IEnumerable<object> items = _registry.ExactBindings
+            IEnumerable<object> items = context.CurrentScope.GetAllExactRegistration()
                 .Where(pair => elementType.IsAssignableFrom(pair.Key))
                 .Select(pair => ResolveInternal(pair.Key, context));
 
@@ -105,14 +98,16 @@ namespace SimplEnteiner.Core.ResolverService
             return lambda.Compile();
         }
 
-        private Registration GetRegistration(Type interfaceType)
+        private Registration GetRegistration(Type interfaceType, Scope scope)
         {
-            if (_registry.ExactBindings.TryGetValue(interfaceType, out Registration registration))
+            Registration registration = scope.FindExactRegistration(interfaceType);
+
+            if (registration != null)
                 return registration;
 
-            if (interfaceType.IsGenericType && interfaceType.IsGenericTypeDefinition == false)
+            if (interfaceType.IsGenericType && (interfaceType.IsGenericTypeDefinition == false))
             {
-                registration = GetClosedGenericRegistration(interfaceType);
+                registration = GetClosedGenericRegistration(interfaceType, scope);
 
                 if (registration != null)
                     return registration;
@@ -129,24 +124,24 @@ namespace SimplEnteiner.Core.ResolverService
             return null;
         }
 
-        private Registration GetClosedGenericRegistration(Type interfaceType)
+        private Registration GetClosedGenericRegistration(Type interfaceType, Scope scope)
         {
-            Registration registration = null;
             Type genericDefinition = interfaceType.GetGenericTypeDefinition();
+            Registration registration = scope.FindOpenGenericRegistration(interfaceType);
 
-            if (_registry.OpenGenericBindings.TryGetValue(genericDefinition, out Registration openRegistration) == false)
-                return registration;
+            if (registration == null)
+                return null;
 
             Type[] args = interfaceType.GetGenericArguments();
-            Type closedImplementation = openRegistration.Implementation.MakeGenericType(args);
+            Type closedImplementation = registration.Implementation.MakeGenericType(args);
 
             if (closedImplementation.SatisfiesOpenedGenericConstraints(genericDefinition) == false)
-                return registration;
+                return null;
 
             ConstructorInfo ctor = closedImplementation.GetInjectableConstructor(s_injectAttributeType);
             Func<object[], object> factory = ctor.GetFactoryMethod();
 
-            return new Registration(closedImplementation, openRegistration.Lifetime, factory, null);
+            return new Registration(closedImplementation, registration.Lifetime, factory, null);
         }
 
         private object ResolveRegistration(Registration registration, Type interfaceType, ResolutionContext context)

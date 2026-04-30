@@ -6,9 +6,9 @@ namespace SimplEnteiner.Core.Binder.Implementations
     internal class BindingTo<TInterface> : IBindingTo<TInterface>
     {
         private readonly BindingBuilderInternal _bindingBuilderInternal;
-        private readonly DIContainer _container;
+        private readonly IBindingTarget _container;
 
-        public BindingTo(BindingBuilderInternal bindingBuilderInternal, DIContainer container)
+        public BindingTo(BindingBuilderInternal bindingBuilderInternal, IBindingTarget container)
         {
             _bindingBuilderInternal = bindingBuilderInternal;
             _container = container;
@@ -48,9 +48,9 @@ namespace SimplEnteiner.Core.Binder.Implementations
     internal class BindingTo : IBindingTo
     {
         private readonly BindingBuilderInternal _bindingBuilderInternal;
-        private readonly DIContainer _container;
+        private readonly IBindingTarget _container;
 
-        public BindingTo(BindingBuilderInternal bindingBuilderInternal, DIContainer container)
+        public BindingTo(BindingBuilderInternal bindingBuilderInternal, IBindingTarget container)
         {
             _bindingBuilderInternal = bindingBuilderInternal;
             _container = container;

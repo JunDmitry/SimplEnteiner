@@ -4,24 +4,21 @@ using System.Linq;
 using SimplEnteiner.Core.Binder;
 using SimplEnteiner.Core.Binder.Implementations;
 using SimplEnteiner.Core.Binder.Interfaces;
-using SimplEnteiner.Core.RegistrationService;
 using SimplEnteiner.Core.ResolverService;
 using SimplEnteiner.Core.ScopeFeature;
 using SimplEnteiner.Utilities;
 
 namespace SimplEnteiner.Core
 {
-    public class DIContainer : IScope
+    public class DIContainer : IScope, IBindingTarget
     {
-        private readonly Registry _registry;
         private readonly List<BindingBuilderInternal> _pendingBindings;
         private readonly Scope _rootScope;
         private readonly IResolver _resolver;
 
         public DIContainer()
         {
-            _registry = new Registry();
-            _resolver = new Resolver(_registry);
+            _resolver = new Resolver();
             _pendingBindings = new List<BindingBuilderInternal>();
             _rootScope = new Scope((t, s) => _resolver.Resolve(t, s));
         }
@@ -83,10 +80,10 @@ namespace SimplEnteiner.Core
             lock (_pendingBindings)
                 _pendingBindings.Clear();
 
-            _registry.ValidateAll();
+            _rootScope.ValidateAll();
         }
 
-        internal void Register(BindingBuilderInternal builder)
+        void IBindingTarget.Register(BindingBuilderInternal builder)
         {
             if (RegisterWithoutRemove(builder) == false)
                 return;
@@ -101,7 +98,7 @@ namespace SimplEnteiner.Core
                 return false;
 
             builder.ExecuteAllStages();
-            _registry.Add(builder);
+            _rootScope.AddRegister(builder);
             builder.MarkRegistered();
 
             return true;
