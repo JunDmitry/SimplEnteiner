@@ -1,10 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using SimplEnteiner.Core.Binder;
 using SimplEnteiner.Core.Binder.Implementations;
 using SimplEnteiner.Core.Binder.Interfaces;
 using SimplEnteiner.Core.InstallerService.Interfaces;
+using SimplEnteiner.Core.Lifecycle;
 using SimplEnteiner.Core.RegistrationService;
 using SimplEnteiner.Utilities;
 
@@ -21,6 +23,12 @@ namespace SimplEnteiner.Core.ScopeFeature
         private readonly Dictionary<Type, object> _scopedInstances;
         private readonly object _scopedLock = new object();
 
+        private readonly List<Scope> _childrens;
+        private readonly object _childrensLock = new object();
+
+        private readonly ICleanupService _cleanupService;
+        private readonly IInterfaceInvoker _interfaceInvoker;
+
         private bool _disposed;
 
         public Scope(ResolverFunc resolver)
@@ -29,6 +37,9 @@ namespace SimplEnteiner.Core.ScopeFeature
             Parent = null;
             _singletons = new Dictionary<Type, object>();
             _scopedInstances = new Dictionary<Type, object>();
+            _childrens = new List<Scope>();
+            _cleanupService = new CleanupService();
+            _interfaceInvoker = new InterfaceInvoker();
         }
 
         protected Scope(Scope parent)
@@ -37,6 +48,9 @@ namespace SimplEnteiner.Core.ScopeFeature
             _resolver = Parent._resolver;
             _singletons = parent._singletons;
             _scopedInstances = new Dictionary<Type, object>();
+            _childrens = new List<Scope>();
+            _cleanupService = new CleanupService();
+            _interfaceInvoker = new InterfaceInvoker();
         }
 
         public Scope Parent { get; }
@@ -48,21 +62,29 @@ namespace SimplEnteiner.Core.ScopeFeature
                 return;
 
             _disposed = true;
-            List<object> instances;
 
             lock(_scopedLock)
             {
-                instances = _scopedInstances.Values.ToList();
                 _scopedInstances.Clear();
             }
 
-            foreach (object instance in instances)
+            if (IsRoot)
             {
-                if (instance is IDisposable disposable)
+                lock (_singletons)
                 {
-                    disposable.Dispose();
+                    foreach (var instance in _singletons.Values)
+                        _cleanupService.AddIfDisposable(instance);
+
+                    _singletons.Clear();
                 }
             }
+            else
+            {
+                lock (Parent._childrensLock)
+                    Parent._childrens.Remove(this);
+            }
+            
+            _cleanupService.Dispose();
         }
 
         public virtual object Resolve(Type interfaceType)
@@ -75,9 +97,52 @@ namespace SimplEnteiner.Core.ScopeFeature
             return (T) _resolver(typeof(T), this);
         }
 
+        public virtual async Task<object> ResolveAsync(Type interfaceType)
+        {
+            object instance = Resolve(interfaceType);
+
+            await _interfaceInvoker.InvokeAsync<ILateInitializable>(instance);
+
+            return instance;
+        }
+
+        public virtual async Task<T> ResolveAsync<T>()
+        {
+            return (T) await ResolveAsync(typeof(T));
+        }
+
+        public virtual object Resolve(Type interfaceType, object id)
+        {
+            return _resolver(interfaceType, this, id);
+        }
+
+        public virtual T Resolve<T>(object id)
+        {
+            return (T)_resolver(typeof(T), this, id);
+        }
+
+        public virtual async Task<object> ResolveAsync(Type interfaceType, object id)
+        {
+            object instance = Resolve(interfaceType, id);
+
+            await _interfaceInvoker.InvokeAsync<ILateInitializable>(instance);
+
+            return instance;
+        }
+
+        public virtual async Task<T> ResolveAsync<T>(object id)
+        {
+            return (T)await ResolveAsync(typeof(T), id);
+        }
+
         public virtual IScope CreateScope()
         {
-            return new Scope(this);
+            Scope child = new Scope(this);
+
+            lock (_childrens)
+                _childrens.Add(child);
+
+            return child;
         }
 
         public virtual void Install(IInstaller installer)
@@ -130,6 +195,37 @@ namespace SimplEnteiner.Core.ScopeFeature
             _registry.ValidateAll();
         }
 
+        internal void Start()
+        {
+            Registration registration;
+
+            foreach (KeyValuePair<Type, Registration> pair in _registry.ExactBindings)
+            {
+                registration = pair.Value;
+
+                if (registration.Instance != null)
+                {
+                    _interfaceInvoker.Invoke<IStartable>(registration.Instance);
+                }
+                else if (registration.Lifetime == LifeTime.Singleton)
+                {
+                    object instance = Resolve(pair.Key);
+                    _interfaceInvoker.Invoke<IStartable>(instance);
+                }
+            }
+
+            //foreach (List<DecoratorRegistration> decorators in _registry.DecoratorBindings.Values)
+            //{
+            //    foreach (DecoratorRegistration decorator in decorators)
+            //    {
+            //        // TODO make property lifetime and apply this lifetime;
+            //    }
+            //}
+
+            for (int i = 0; i < _childrens.Count; i++)
+                _childrens[i].Start();
+        }
+
         internal void AddRegister(BindingBuilderInternal builder)
         {
             _registry.Add(builder);
@@ -152,6 +248,19 @@ namespace SimplEnteiner.Core.ScopeFeature
         internal Registration FindOpenGenericRegistration(Type interfaceType)
         {
             return FindRegistration(interfaceType, s => s._registry.OpenGenericBindings);
+        }
+
+        internal Registration FindConditionalRegistration(Type interfaceType, object id)
+        {
+            ConditionalKey key = new ConditionalKey(interfaceType, id);
+
+            for (Scope scope = this; scope != null; scope = scope.Parent)
+            {
+                if (scope._registry.ConditionalBindings.TryGetValue(key, out Registration registration))
+                    return registration;
+            }
+
+            return null;
         }
 
         internal object GetSingleton(Type interfaceType)
@@ -204,7 +313,13 @@ namespace SimplEnteiner.Core.ScopeFeature
             lock (_scopedLock)
             {
                 _scopedInstances[interfaceType] = instance;
+                TrackDisposable(instance);
             }
+        }
+
+        internal void TrackDisposable(object instance)
+        {
+            _cleanupService.AddIfDisposable(instance);
         }
 
         private IReadOnlyDictionary<Type, Registration> GetAllRegistration(Func<Scope, IReadOnlyDictionary<Type, Registration>> selector)

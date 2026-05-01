@@ -7,12 +7,14 @@ namespace SimplEnteiner.Core.ScopeFeature
     {
         private bool _disposed;
 
-        public ResolutionContext(Scope scope)
+        public ResolutionContext(Scope scope, object id = null)
         {
             CurrentScope = scope;
+            Id = id;
         }
 
         public Scope CurrentScope { get; private set; }
+        public object Id { get; }
         public Dictionary<Type, object> CachedInstances { get; } = new Dictionary<Type, object>();
 
         public void Dispose()

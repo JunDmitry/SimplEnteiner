@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using SimplEnteiner.Core.Binder.BuilderStages;
-using SimplEnteiner.Core.LifeScope;
+using SimplEnteiner.Core.Lifecycle;
 using SimplEnteiner.Utilities;
 
 namespace SimplEnteiner.Core.Binder

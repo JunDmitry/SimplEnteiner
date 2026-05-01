@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
+using SimplEnteiner.Core.Lifecycle;
 using SimplEnteiner.Core.RegistrationService;
 using SimplEnteiner.Core.ScopeFeature;
 using SimplEnteiner.Utilities;
@@ -14,11 +15,18 @@ namespace SimplEnteiner.Core.ResolverService
     {
         private static readonly Type s_injectAttributeType = Constants.InjectAttributeType;
 
-        public T Resolve<T>(Scope scope) => (T)Resolve(typeof(T), scope);
+        private readonly IInterfaceInvoker _invoker;
 
-        public object Resolve(Type interfaceType, Scope scope)
+        public Resolver()
         {
-            using ResolutionContext context = new ResolutionContext(scope);
+            _invoker = new InterfaceInvoker();
+        }
+
+        public T Resolve<T>(Scope scope, object id = null) => (T)Resolve(typeof(T), scope, id);
+
+        public object Resolve(Type interfaceType, Scope scope, object id = null)
+        {
+            using ResolutionContext context = new ResolutionContext(scope, id);
             
             return ResolveInternal(interfaceType, context);
         }
@@ -49,7 +57,7 @@ namespace SimplEnteiner.Core.ResolverService
             }
             else
             {
-                Registration registration = GetRegistration(interfaceType, context.CurrentScope).ThrowInvalidIfNull($"No binding found for {interfaceType}");
+                Registration registration = GetRegistration(interfaceType, context).ThrowInvalidIfNull($"No binding found for {interfaceType}");
                 instance = ResolveRegistration(registration, interfaceType, context);
             }
 
@@ -98,16 +106,24 @@ namespace SimplEnteiner.Core.ResolverService
             return lambda.Compile();
         }
 
-        private Registration GetRegistration(Type interfaceType, Scope scope)
+        private Registration GetRegistration(Type interfaceType, ResolutionContext context)
         {
-            Registration registration = scope.FindExactRegistration(interfaceType);
+            if (context.Id != null)
+            {
+                Registration reg = context.CurrentScope.FindConditionalRegistration(interfaceType, context.Id)
+                    ?? throw new InvalidOperationException($"No binding found for {interfaceType} with id '{context.Id}'");
+
+                return reg;
+            }
+
+            Registration registration = context.CurrentScope.FindExactRegistration(interfaceType);
 
             if (registration != null)
                 return registration;
 
             if (interfaceType.IsGenericType && (interfaceType.IsGenericTypeDefinition == false))
             {
-                registration = GetClosedGenericRegistration(interfaceType, scope);
+                registration = GetClosedGenericRegistration(interfaceType, context.CurrentScope);
 
                 if (registration != null)
                     return registration;
@@ -118,7 +134,7 @@ namespace SimplEnteiner.Core.ResolverService
                 ConstructorInfo ctor = interfaceType.GetInjectableConstructor(s_injectAttributeType);
                 Func<object[], object> factory = ctor.GetFactoryMethod();
 
-                return new Registration(interfaceType, LifeScope.LifeTime.Transient, factory, null);
+                return new Registration(interfaceType, LifeTime.Transient, factory, null);
             }
 
             return null;
@@ -160,6 +176,8 @@ namespace SimplEnteiner.Core.ResolverService
             InjectMembers(instance, registration.Implementation, context);
             StoreInstance(registration, interfaceType, instance, context);
 
+            _invoker.Invoke<IInitializable>(instance);
+
             return instance;
         }
 
@@ -190,7 +208,7 @@ namespace SimplEnteiner.Core.ResolverService
                     result[i] = ResolveInternal(parameterType, context);
                 }
                 else
-                { 
+                {
                     result[i] = additionalArguments[selectedArgument];
                     additionalArguments.RemoveAt(selectedArgument);
                 }
@@ -227,9 +245,9 @@ namespace SimplEnteiner.Core.ResolverService
         {
             return registration.Lifetime switch
             {
-                LifeScope.LifeTime.Singleton => registration.Instance ?? context.CurrentScope.GetSingleton(interfaceType),
-                LifeScope.LifeTime.Scoped => context.CurrentScope.GetScoped(interfaceType),
-                LifeScope.LifeTime.Cached => context.CachedInstances.TryGetValue(interfaceType, out object instance)
+                LifeTime.Singleton => registration.Instance ?? context.CurrentScope.GetSingleton(interfaceType),
+                LifeTime.Scoped => context.CurrentScope.GetScoped(interfaceType),
+                LifeTime.Cached => context.CachedInstances.TryGetValue(interfaceType, out object instance)
                     ? instance : null,
                 _ => null
             };
@@ -239,20 +257,22 @@ namespace SimplEnteiner.Core.ResolverService
         {
             switch (registration.Lifetime)
             {
-                case LifeScope.LifeTime.Transient:
+                case LifeTime.Transient:
+                    context.CurrentScope.TrackDisposable(instance);
                     break;
 
-                case LifeScope.LifeTime.Singleton:
+                case LifeTime.Singleton:
                     if (registration.Instance == null)
                         context.CurrentScope.StoreSingleton(interfaceType, instance);
 
                     break;
 
-                case LifeScope.LifeTime.Cached:
+                case LifeTime.Cached:
                     context.CachedInstances[interfaceType] = instance;
+                    context.CurrentScope.TrackDisposable(instance);
                     break;
 
-                case LifeScope.LifeTime.Scoped:
+                case LifeTime.Scoped:
                     context.CurrentScope.StoreScoped(interfaceType, instance);
                     break;
             }
@@ -262,7 +282,6 @@ namespace SimplEnteiner.Core.ResolverService
         {
             // TODO
             // Easy decorators, optimize apply lifetime same as interfaceType lifetime
-            // and replace slow Activator.CreateInstance(...) to FactoryMethod(with transient it doesn't make sense)
 
             List<DecoratorRegistration> decorators = context.CurrentScope.GetDecoratorRegistrations(interfaceType);
 
@@ -271,11 +290,12 @@ namespace SimplEnteiner.Core.ResolverService
 
             foreach (DecoratorRegistration decorator in decorators)
             {
-                ConstructorInfo ctor = decorator.DecoratorType.GetInjectableConstructor(s_injectAttributeType);
-                object[] parameters = ResolveConstructorWithArguments(ctor, context, instance);
-                instance = Activator.CreateInstance(decorator.DecoratorType, parameters);
+                object[] parameters = ResolveConstructorWithArguments(decorator.Constructor, context, instance);
+                instance = decorator.Factory(parameters);
 
                 InjectMembers(instance, decorator.DecoratorType, context);
+                context.CurrentScope.TrackDisposable(instance);
+                _invoker.Invoke<IInitializable>(instance);
             }
 
             return instance;

@@ -1,6 +1,6 @@
 ﻿using System;
 using SimplEnteiner.Core.Binder.Interfaces;
-using SimplEnteiner.Core.LifeScope;
+using SimplEnteiner.Core.Lifecycle;
 
 namespace SimplEnteiner.Core.Binder.Implementations
 {

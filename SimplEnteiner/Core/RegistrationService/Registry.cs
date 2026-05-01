@@ -3,7 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using SimplEnteiner.Core.Binder;
-using SimplEnteiner.Core.LifeScope;
+using SimplEnteiner.Core.Lifecycle;
+using SimplEnteiner.Core.ScopeFeature;
 
 namespace SimplEnteiner.Core.RegistrationService
 {
@@ -12,19 +13,19 @@ namespace SimplEnteiner.Core.RegistrationService
         private readonly Dictionary<Type, Registration> _exactBindings;
         private readonly Dictionary<Type, Registration> _openGenericBindings;
         private readonly Dictionary<Type, List<DecoratorRegistration>> _decoratorBindings;
-        private readonly Dictionary<(Type, object), Registration> _conditionalBindings;
+        private readonly Dictionary<ConditionalKey, Registration> _conditionalBindings;
 
         public Registry()
         {
             _exactBindings = new Dictionary<Type, Registration>();
             _openGenericBindings = new Dictionary<Type, Registration>();
             _decoratorBindings = new Dictionary<Type, List<DecoratorRegistration>>();
-            _conditionalBindings = new Dictionary<(Type, object), Registration>();
+            _conditionalBindings = new Dictionary<ConditionalKey, Registration>();
         }
 
         public IReadOnlyDictionary<Type, Registration> ExactBindings => _exactBindings;
         public IReadOnlyDictionary<Type, Registration> OpenGenericBindings => _openGenericBindings;
-        public IReadOnlyDictionary<(Type, object), Registration> ConditionalBindings => _conditionalBindings;
+        public IReadOnlyDictionary<ConditionalKey, Registration> ConditionalBindings => _conditionalBindings;
         public IReadOnlyDictionary<Type, List<DecoratorRegistration>> DecoratorBindings => _decoratorBindings;
 
         internal void Add(BindingBuilderInternal builder)
@@ -34,8 +35,14 @@ namespace SimplEnteiner.Core.RegistrationService
             if (builder.HasDecorators)
             {
                 List<DecoratorRegistration> decoratorRegistrations = builder.Decorators
-                    .Select(t => new DecoratorRegistration(builder.InterfaceType, t.Item1, t.Item2))
-                    .ToList();
+                    .Select(t =>
+                    {
+                        ConstructorInfo ctor = t.Item1.GetInjectableConstructor(Constants.InjectAttributeType)
+                            ?? throw new ArgumentException($"No constructor for decorator {t.Item1}");
+                        Func<object[], object> factory = ctor.GetFactoryMethod();
+
+                        return new DecoratorRegistration(builder.InterfaceType, t.Item1, t.Item2, ctor, factory);
+                    }).ToList();
                 _decoratorBindings[builder.InterfaceType] = decoratorRegistrations;
                 return;
             }
@@ -44,16 +51,15 @@ namespace SimplEnteiner.Core.RegistrationService
 
             if (builder.ConditionType != null || builder.Id != null)
             {
-                (Type, object) key = (builder.InterfaceType, builder.Id ?? builder.ConditionType);
-                _conditionalBindings[key] = registration;
+                AddConditionalRegistration(builder.InterfaceType, builder.Id ?? builder.ConditionType, registration);
             }
             else if (builder.InterfaceType.IsGenericTypeDefinition)
             {
-                _openGenericBindings[builder.InterfaceType] = new Registration(builder.ImplementationType ?? builder.InterfaceType, builder.LifeTime, null, null);
+                AddOpenGenericRegistration(builder.InterfaceType, new Registration(builder.ImplementationType ?? builder.InterfaceType, builder.LifeTime, null, null));
             }
             else
             {
-                _exactBindings[builder.InterfaceType] = registration;
+                AddExactRegistration(builder.InterfaceType, registration);
             }
 
             // Iterative validating maybe can invalid, if not all dependency registered in current time

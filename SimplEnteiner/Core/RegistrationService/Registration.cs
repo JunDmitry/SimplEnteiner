@@ -1,5 +1,5 @@
 ﻿using System;
-using SimplEnteiner.Core.LifeScope;
+using SimplEnteiner.Core.Lifecycle;
 
 namespace SimplEnteiner.Core.RegistrationService
 {

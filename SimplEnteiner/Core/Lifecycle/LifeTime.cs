@@ -1,4 +1,4 @@
-﻿namespace SimplEnteiner.Core.LifeScope
+﻿namespace SimplEnteiner.Core.Lifecycle
 {
     public enum LifeTime
     {
