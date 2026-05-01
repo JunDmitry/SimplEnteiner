@@ -4,6 +4,7 @@ using System.Linq;
 using SimplEnteiner.Core.Binder;
 using SimplEnteiner.Core.Binder.Implementations;
 using SimplEnteiner.Core.Binder.Interfaces;
+using SimplEnteiner.Core.InstallerService.Interfaces;
 using SimplEnteiner.Core.ResolverService;
 using SimplEnteiner.Core.ScopeFeature;
 using SimplEnteiner.Utilities;
@@ -63,6 +64,26 @@ namespace SimplEnteiner.Core
                 _pendingBindings.Add(bindingBuilder);
 
             return new BindingTo(bindingBuilder, this);
+        }
+
+        public IBindingDecorate<TService> Decorate<TService>()
+        {
+            BindingBuilderInternal builderInternal = new BindingBuilderInternal(typeof(TService));
+
+            return new BindingDecorate<TService>(builderInternal, this);
+        }
+
+        public IBindingDecorate Decorate(Type interfaceType)
+        {
+            interfaceType.ThrowIfArgumentNull();
+            BindingBuilderInternal builderInternal = new BindingBuilderInternal(interfaceType);
+
+            return new BindingDecorate(builderInternal, this);
+        }
+
+        public virtual void Install(IInstaller installer)
+        {
+            installer.ThrowIfArgumentNull().Install(this);
         }
 
         public void Build()

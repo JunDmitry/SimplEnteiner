@@ -53,7 +53,7 @@ namespace SimplEnteiner.Core.ResolverService
                 instance = ResolveRegistration(registration, interfaceType, context);
             }
 
-            return instance;
+            return ResolveDecorators(instance, interfaceType, context);
         }
 
         private object ResolveAllEnumerable(Type elementType, ResolutionContext context)
@@ -163,6 +163,42 @@ namespace SimplEnteiner.Core.ResolverService
             return instance;
         }
 
+        private object[] ResolveConstructorWithArguments(ConstructorInfo ctor, ResolutionContext context, params object[] arguments)
+        {
+            List<object> additionalArguments = arguments == null ? new List<object>() : arguments.ToList();
+            ParameterInfo[] parameters = ctor.GetParameters();
+            object[] result = new object[parameters.Length];
+
+            for (int i = 0; i < parameters.Length; i++)
+            {
+                Type parameterType = parameters[i].ParameterType;
+                int selectedArgument = -1;
+
+                for (int j = 0; j < additionalArguments.Count; j++)
+                {
+                    Type type = additionalArguments[j].GetType();
+                    
+                    if (parameterType.IsAssignableFrom(type) == false)
+                        continue;
+
+                    selectedArgument = j;
+                    break;
+                }
+
+                if (selectedArgument == -1)
+                {
+                    result[i] = ResolveInternal(parameterType, context);
+                }
+                else
+                { 
+                    result[i] = additionalArguments[selectedArgument];
+                    additionalArguments.RemoveAt(selectedArgument);
+                }
+            }
+
+            return result;
+        }
+
         private void InjectMembers(object instance, Type implementation, ResolutionContext context)
         {
             foreach (MemberInfo member in implementation.GetInjectableMembers(s_injectAttributeType))
@@ -220,6 +256,29 @@ namespace SimplEnteiner.Core.ResolverService
                     context.CurrentScope.StoreScoped(interfaceType, instance);
                     break;
             }
+        }
+
+        private object ResolveDecorators(object instance, Type interfaceType, ResolutionContext context)
+        {
+            // TODO
+            // Easy decorators, optimize apply lifetime same as interfaceType lifetime
+            // and replace slow Activator.CreateInstance(...) to FactoryMethod(with transient it doesn't make sense)
+
+            List<DecoratorRegistration> decorators = context.CurrentScope.GetDecoratorRegistrations(interfaceType);
+
+            if (decorators.Count == 0)
+                return instance;
+
+            foreach (DecoratorRegistration decorator in decorators)
+            {
+                ConstructorInfo ctor = decorator.DecoratorType.GetInjectableConstructor(s_injectAttributeType);
+                object[] parameters = ResolveConstructorWithArguments(ctor, context, instance);
+                instance = Activator.CreateInstance(decorator.DecoratorType, parameters);
+
+                InjectMembers(instance, decorator.DecoratorType, context);
+            }
+
+            return instance;
         }
     }
 }

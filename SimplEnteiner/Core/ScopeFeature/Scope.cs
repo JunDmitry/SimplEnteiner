@@ -4,6 +4,7 @@ using System.Linq;
 using SimplEnteiner.Core.Binder;
 using SimplEnteiner.Core.Binder.Implementations;
 using SimplEnteiner.Core.Binder.Interfaces;
+using SimplEnteiner.Core.InstallerService.Interfaces;
 using SimplEnteiner.Core.RegistrationService;
 using SimplEnteiner.Utilities;
 
@@ -79,6 +80,11 @@ namespace SimplEnteiner.Core.ScopeFeature
             return new Scope(this);
         }
 
+        public virtual void Install(IInstaller installer)
+        {
+            installer.ThrowIfArgumentNull().Install(this);
+        }
+
         public IBindingTo<T> Bind<T>()
         {
             BindingBuilderInternal builderInternal = new BindingBuilderInternal(typeof(T));
@@ -89,10 +95,24 @@ namespace SimplEnteiner.Core.ScopeFeature
         public IBindingTo Bind(Type interfaceType)
         {
             interfaceType.ThrowIfArgumentNull();
-
             BindingBuilderInternal builderInternal = new BindingBuilderInternal(interfaceType);
 
             return new BindingTo(builderInternal, this);
+        }
+
+        public IBindingDecorate<TService> Decorate<TService>()
+        {
+            BindingBuilderInternal builderInternal = new BindingBuilderInternal(typeof(TService));
+
+            return new BindingDecorate<TService>(builderInternal, this);
+        }
+
+        public IBindingDecorate Decorate(Type interfaceType)
+        {
+            interfaceType.ThrowIfArgumentNull();
+            BindingBuilderInternal builderInternal = new BindingBuilderInternal(interfaceType);
+
+            return new BindingDecorate(builderInternal, this);
         }
 
         void IBindingTarget.Register(BindingBuilderInternal bindingBuilder)
@@ -150,6 +170,25 @@ namespace SimplEnteiner.Core.ScopeFeature
                 _scopedInstances.TryGetValue(interfaceType, out object instance);
                 return instance;
             }
+        }
+
+        internal List<DecoratorRegistration> GetDecoratorRegistrations(Type interfaceType)
+        {
+            List<DecoratorRegistration > registrations = new List<DecoratorRegistration>();
+            Stack<Scope> scopes = new Stack<Scope>();
+            
+            for (Scope scope = this; scope != null; scope = scope.Parent)
+                scopes.Push(scope);
+
+            while (scopes.Count > 0)
+            {
+                Scope scope = scopes.Pop();
+
+                if (scope._registry.DecoratorBindings.TryGetValue(interfaceType, out List<DecoratorRegistration> inner))
+                    registrations.AddRange(inner);
+            }
+
+            return registrations;
         }
 
         internal void StoreSingleton(Type interfaceType, object instance)

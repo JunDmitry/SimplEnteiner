@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using SimplEnteiner.Core.Binder;
 using SimplEnteiner.Core.LifeScope;
@@ -10,22 +11,34 @@ namespace SimplEnteiner.Core.RegistrationService
     {
         private readonly Dictionary<Type, Registration> _exactBindings;
         private readonly Dictionary<Type, Registration> _openGenericBindings;
+        private readonly Dictionary<Type, List<DecoratorRegistration>> _decoratorBindings;
         private readonly Dictionary<(Type, object), Registration> _conditionalBindings;
 
         public Registry()
         {
             _exactBindings = new Dictionary<Type, Registration>();
             _openGenericBindings = new Dictionary<Type, Registration>();
+            _decoratorBindings = new Dictionary<Type, List<DecoratorRegistration>>();
             _conditionalBindings = new Dictionary<(Type, object), Registration>();
         }
 
         public IReadOnlyDictionary<Type, Registration> ExactBindings => _exactBindings;
         public IReadOnlyDictionary<Type, Registration> OpenGenericBindings => _openGenericBindings;
         public IReadOnlyDictionary<(Type, object), Registration> ConditionalBindings => _conditionalBindings;
+        public IReadOnlyDictionary<Type, List<DecoratorRegistration>> DecoratorBindings => _decoratorBindings;
 
         internal void Add(BindingBuilderInternal builder)
         {
             Validate(builder);
+
+            if (builder.HasDecorators)
+            {
+                List<DecoratorRegistration> decoratorRegistrations = builder.Decorators
+                    .Select(t => new DecoratorRegistration(builder.InterfaceType, t.Item1, t.Item2))
+                    .ToList();
+                _decoratorBindings[builder.InterfaceType] = decoratorRegistrations;
+                return;
+            }
 
             Registration registration = CreateRegistration(builder);
 
@@ -103,15 +116,50 @@ namespace SimplEnteiner.Core.RegistrationService
             Type interfaceType = builder.InterfaceType;
             Type implementationType = builder.ImplementationType ?? interfaceType;
 
+            if (builder.HasDecorators)
+            {
+                ValidateDecorators(builder);
+                return;
+            }
+
+            ValidateFirstStep(interfaceType, implementationType);
+
+            ConstructorInfo ctor = implementationType.GetInjectableConstructor(injectAttribute)
+                ?? throw new ArgumentException($"No public constructor found for {implementationType}.");
+
+            ValidateSecondStep(interfaceType, implementationType);
+        }
+
+        private static void ValidateDecorators(BindingBuilderInternal bindingBuilder)
+        {
+            Type interfaceType = bindingBuilder.InterfaceType;
+            
+            foreach ((Type, int) decoratorType in bindingBuilder.Decorators)
+            {
+                ValidateFirstStep(interfaceType, decoratorType.Item1);
+
+                ConstructorInfo constructor = decoratorType.Item1.GetInjectableConstructor(Constants.InjectAttributeType)
+                    ?? throw new ArgumentException($"No public constructor found for {decoratorType.Item1}.");
+                bool hasDecoratorParameter = constructor.GetParameters().Any(p => interfaceType.IsAssignableFrom(p.ParameterType));
+
+                if (hasDecoratorParameter == false)
+                    throw new InvalidOperationException($"Decorator {decoratorType} must have a constructor parameter assignable to {interfaceType}.");
+
+                ValidateSecondStep(interfaceType, decoratorType.Item1);
+            }
+        }
+
+        private static void ValidateFirstStep(Type interfaceType, Type implementationType)
+        {
             if (implementationType.IsConcreteClass(isIgnoreGeneratedType: true) == false)
                 throw new ArgumentException($"Implementation {implementationType} is not a concrete class.");
 
             if (IsCompatible(interfaceType, implementationType) == false)
                 throw new ArgumentException($"{implementationType} is not assignable to {interfaceType}.");
+        }
 
-            ConstructorInfo ctor = implementationType.GetInjectableConstructor(injectAttribute)
-                ?? throw new ArgumentException($"No public constructor found for {implementationType}.");
-
+        private static void ValidateSecondStep(Type interfaceType, Type implementationType)
+        {
             if (interfaceType.IsGenericType && (interfaceType.IsGenericTypeDefinition == false))
             {
                 if (implementationType.SatisfiesClosedGenericConstraints(interfaceType) == false)
