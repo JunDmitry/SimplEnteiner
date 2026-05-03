@@ -15,19 +15,11 @@ namespace SimplEnteiner.Core.Binder.Implementations
             _target = target;
         }
 
-        public IBindingDecorate<TInterface> With<TImplementation>(int? order = null) where TImplementation : TInterface
+        public IBindingDecorateLifetime<TInterface> With<TImplementation>(int? order = null) where TImplementation : TInterface
         {
             _bindingBuilder.AddDecorator(typeof(TImplementation), order);
 
-            return this;
-        }
-
-        public void Apply()
-        {
-            if (_bindingBuilder.HasDecorators == false)
-                throw new InvalidOperationException($"Invalid operation: decorated service does not have added decorators!");
-
-            _target.Register(_bindingBuilder);
+            return new BindingDecorateLifetime<TInterface>(_bindingBuilder, _target);
         }
     }
 
@@ -42,19 +34,35 @@ namespace SimplEnteiner.Core.Binder.Implementations
             _target = target;
         }
 
-        public IBindingDecorate With(Type implementationType, int? order = null)
+        public IBindingDecorateLifetime With(Type implementationType, int? order = null)
         {
+            Validate(implementationType);
+
             _bindingBuilder.AddDecorator(implementationType.ThrowIfArgumentNull(), order);
 
-            return this;
+            return new BindingDecorateLifetime(_bindingBuilder, _target);
         }
 
-        public void Apply()
+        private void Validate(Type implementationType)
         {
-            if (_bindingBuilder.HasDecorators == false)
-                throw new InvalidOperationException($"Invalid operation: decorated service does not have added decorators!");
+            Type interfaceType = _bindingBuilder.InterfaceType;
 
-            _target.Register(_bindingBuilder);
+            if (interfaceType.IsGenericType && (interfaceType.IsGenericTypeDefinition == false))
+            {
+                if ((implementationType.IsConcreteClass() == false) 
+                    || implementationType.SatisfiesClosedGenericConstraints(interfaceType) == false)
+                    throw new InvalidOperationException($"Invalid decorator {implementationType}. Should assignable to {interfaceType}.");
+            }
+            else if (interfaceType.IsGenericType)
+            {
+                if (implementationType.IsAssignableToGenericTypeDefinition(interfaceType) == false)
+                    throw new InvalidOperationException($"Invalid decorator {implementationType}. Should assignable to {interfaceType}.");
+            }
+            else
+            {
+                if (interfaceType.IsAssignableFrom(implementationType) == false)
+                    throw new InvalidOperationException($"Invalid decorator {implementationType}. Should assignable to {interfaceType}.");
+            }
         }
     }
 }

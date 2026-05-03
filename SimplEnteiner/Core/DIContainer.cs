@@ -6,6 +6,7 @@ using SimplEnteiner.Core.Binder;
 using SimplEnteiner.Core.Binder.Implementations;
 using SimplEnteiner.Core.Binder.Interfaces;
 using SimplEnteiner.Core.InstallerService.Interfaces;
+using SimplEnteiner.Core.Lifecycle;
 using SimplEnteiner.Core.ResolverService;
 using SimplEnteiner.Core.ScopeFeature;
 using SimplEnteiner.Utilities;
@@ -143,6 +144,11 @@ namespace SimplEnteiner.Core
 
             lock (_pendingBindings)
                 _pendingBindings.Remove(builder);
+        }
+
+        void IBindingTarget.RegisterDecorator(BindingBuilderInternal bindingBuilder)
+        {
+            ((IBindingTarget)_rootScope).RegisterDecorator(bindingBuilder);
         }
 
         private bool RegisterWithoutRemove(BindingBuilderInternal builder)

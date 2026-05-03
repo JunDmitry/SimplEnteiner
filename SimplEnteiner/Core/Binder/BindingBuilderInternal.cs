@@ -25,8 +25,7 @@ namespace SimplEnteiner.Core.Binder
         public List<object> Arguments { get; } = new List<object>();
         public Type ConditionType { get; private set; }
         public object Id { get; private set; }
-        public List<(Type, int)> Decorators { get; } = new List<(Type, int)>();
-        public bool HasDecorators => Decorators.Count > 0;
+        public int? Order { get; private set; }
         public bool IsComplete => _state.CurrentIs<FinalStage>();
         public bool IsRegistered { get; private set; }
 
@@ -88,10 +87,11 @@ namespace SimplEnteiner.Core.Binder
 
         public void AddDecorator(Type type, int? order = null)
         {
-            int concreteOrder = order ?? (HasDecorators ? Decorators[^1].Item2 + 1 : 0);
-            
-            int indexToInsert = Decorators.FindBinaryIndexMoreThan((type, concreteOrder));
-            Decorators.Insert(indexToInsert, (type, concreteOrder));
+            ThrowIfCantTransit<ImplementationStage>("Decorator");
+
+            Order = order;
+            ImplementationType = type;
+            _state.ChangeTo<ImplementationStage>();
         }
 
         internal void ExecuteAllStages()

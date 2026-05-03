@@ -5,6 +5,7 @@ using System.Reflection;
 using SimplEnteiner.Core.Binder;
 using SimplEnteiner.Core.Lifecycle;
 using SimplEnteiner.Core.ScopeFeature;
+using SimplEnteiner.Utilities;
 
 namespace SimplEnteiner.Core.RegistrationService
 {
@@ -31,21 +32,6 @@ namespace SimplEnteiner.Core.RegistrationService
         internal void Add(BindingBuilderInternal builder)
         {
             Validate(builder);
-
-            if (builder.HasDecorators)
-            {
-                List<DecoratorRegistration> decoratorRegistrations = builder.Decorators
-                    .Select(t =>
-                    {
-                        ConstructorInfo ctor = t.Item1.GetInjectableConstructor(Constants.InjectAttributeType)
-                            ?? throw new ArgumentException($"No constructor for decorator {t.Item1}");
-                        Func<object[], object> factory = ctor.GetFactoryMethod();
-
-                        return new DecoratorRegistration(builder.InterfaceType, t.Item1, t.Item2, ctor, factory);
-                    }).ToList();
-                _decoratorBindings[builder.InterfaceType] = decoratorRegistrations;
-                return;
-            }
 
             Registration registration = CreateRegistration(builder);
 
@@ -80,6 +66,24 @@ namespace SimplEnteiner.Core.RegistrationService
         internal void AddConditionalRegistration(Type interfaceType, object id, Registration registration)
         {
             _conditionalBindings[(interfaceType, id)] = registration;
+        }
+
+        internal void AddDecorator(DecoratorRegistration decoratorRegistration)
+        {
+            ValidateDecorator(decoratorRegistration);
+
+            Type interfaceType = decoratorRegistration.InterfaceType;
+
+            if (_decoratorBindings.TryGetValue(interfaceType, out List<DecoratorRegistration> decorators) == false)
+            {
+                decorators = new List<DecoratorRegistration>();
+                _decoratorBindings[interfaceType] = decorators;
+            }
+
+            decoratorRegistration.Order ??= decorators.Count == 0 ? 0 : decorators[^1].Order + 1;
+            
+            int insertIndex = decorators.FindBinaryIndexMoreThan(decoratorRegistration, d => d.Order.Value);
+            decorators.Insert(insertIndex, decoratorRegistration);
         }
 
         internal bool CanResolveGeneric(Type interfaceType)
@@ -122,12 +126,6 @@ namespace SimplEnteiner.Core.RegistrationService
             Type interfaceType = builder.InterfaceType;
             Type implementationType = builder.ImplementationType ?? interfaceType;
 
-            if (builder.HasDecorators)
-            {
-                ValidateDecorators(builder);
-                return;
-            }
-
             ValidateFirstStep(interfaceType, implementationType);
 
             ConstructorInfo ctor = implementationType.GetInjectableConstructor(injectAttribute)
@@ -136,23 +134,21 @@ namespace SimplEnteiner.Core.RegistrationService
             ValidateSecondStep(interfaceType, implementationType);
         }
 
-        private static void ValidateDecorators(BindingBuilderInternal bindingBuilder)
+        private static void ValidateDecorator(DecoratorRegistration registration)
         {
-            Type interfaceType = bindingBuilder.InterfaceType;
-            
-            foreach ((Type, int) decoratorType in bindingBuilder.Decorators)
-            {
-                ValidateFirstStep(interfaceType, decoratorType.Item1);
+            Type interfaceType = registration.InterfaceType;
+            Type decoratorType = registration.DecoratorType;
 
-                ConstructorInfo constructor = decoratorType.Item1.GetInjectableConstructor(Constants.InjectAttributeType)
-                    ?? throw new ArgumentException($"No public constructor found for {decoratorType.Item1}.");
-                bool hasDecoratorParameter = constructor.GetParameters().Any(p => interfaceType.IsAssignableFrom(p.ParameterType));
+            ValidateFirstStep(interfaceType, decoratorType);
 
-                if (hasDecoratorParameter == false)
-                    throw new InvalidOperationException($"Decorator {decoratorType} must have a constructor parameter assignable to {interfaceType}.");
+            ConstructorInfo constructor = decoratorType.GetInjectableConstructor(Constants.InjectAttributeType)
+                ?? throw new ArgumentException($"No public constructor found for {decoratorType}.");
+            bool hasDecoratorParameter = constructor.GetParameters().Any(p => interfaceType.IsAssignableFrom(p.ParameterType));
 
-                ValidateSecondStep(interfaceType, decoratorType.Item1);
-            }
+            if (hasDecoratorParameter == false)
+                throw new InvalidOperationException($"Decorator {decoratorType} must have a constructor parameter assignable to {interfaceType}.");
+
+            ValidateSecondStep(interfaceType, decoratorType);
         }
 
         private static void ValidateFirstStep(Type interfaceType, Type implementationType)

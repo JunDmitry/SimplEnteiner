@@ -14,6 +14,7 @@ namespace SimplEnteiner.Core.ResolverService
     internal class Resolver : IResolver
     {
         private static readonly Type s_injectAttributeType = Constants.InjectAttributeType;
+        private static readonly MethodInfo s_resolveMethod = typeof(Resolver).GetMethod(nameof(Resolve), new[] { typeof(Type), typeof(Scope), typeof(object) });
 
         private readonly IInterfaceInvoker _invoker;
 
@@ -55,7 +56,8 @@ namespace SimplEnteiner.Core.ResolverService
                     instance = CreateFunc(argumentType, context);
                 }
             }
-            else
+            
+            if (instance == null)
             {
                 Registration registration = GetRegistration(interfaceType, context).ThrowInvalidIfNull($"No binding found for {interfaceType}");
                 instance = ResolveRegistration(registration, interfaceType, context);
@@ -95,11 +97,12 @@ namespace SimplEnteiner.Core.ResolverService
             Resolver resolver = this;
 
             Type funcType = typeof(Func<>).MakeGenericType(argumentType);
-            MethodInfo resolveMethod = typeof(Resolver).GetMethod(nameof(Resolve), new[] { typeof(Type), typeof(Scope) });
             ConstantExpression resolverInstance = Expression.Constant(resolver);
             ConstantExpression typeConst = Expression.Constant(argumentType);
             ConstantExpression scopeConst = Expression.Constant(scope);
-            MethodCallExpression methodCall = Expression.Call(resolverInstance, resolveMethod, typeConst, scopeConst);
+            ConstantExpression nullObject = Expression.Constant(null, typeof(object));
+
+            MethodCallExpression methodCall = Expression.Call(resolverInstance, s_resolveMethod, typeConst, scopeConst, nullObject);
             UnaryExpression convert = Expression.Convert(methodCall, argumentType);
             LambdaExpression lambda = Expression.Lambda(funcType, convert);
 
@@ -114,6 +117,13 @@ namespace SimplEnteiner.Core.ResolverService
                     ?? throw new InvalidOperationException($"No binding found for {interfaceType} with id '{context.Id}'");
 
                 return reg;
+            }
+            else if (context.RequestType != null)
+            {
+                Registration reg = context.CurrentScope.FindConditionalRegistration(interfaceType, context.RequestType);
+
+                if (reg != null)
+                    return reg;
             }
 
             Registration registration = context.CurrentScope.FindExactRegistration(interfaceType);
@@ -168,9 +178,7 @@ namespace SimplEnteiner.Core.ResolverService
                 return instance;
 
             ConstructorInfo ctor = registration.Implementation.GetInjectableConstructor(s_injectAttributeType);
-            object[] parameters = ctor.GetParameters()
-                .Select(p => ResolveInternal(p.ParameterType, context))
-                .ToArray();
+            object[] parameters = ResolveParameters(ctor.GetParameters(), context, registration.Implementation);
             instance = registration.Factory(parameters);
 
             InjectMembers(instance, registration.Implementation, context);
@@ -181,7 +189,7 @@ namespace SimplEnteiner.Core.ResolverService
             return instance;
         }
 
-        private object[] ResolveConstructorWithArguments(ConstructorInfo ctor, ResolutionContext context, params object[] arguments)
+        private object[] ResolveConstructorWithArguments(Type implementation, ConstructorInfo ctor, ResolutionContext context, params object[] arguments)
         {
             List<object> additionalArguments = arguments == null ? new List<object>() : arguments.ToList();
             ParameterInfo[] parameters = ctor.GetParameters();
@@ -205,7 +213,7 @@ namespace SimplEnteiner.Core.ResolverService
 
                 if (selectedArgument == -1)
                 {
-                    result[i] = ResolveInternal(parameterType, context);
+                    result[i] = ResolveMember(parameterType, context, implementation);
                 }
                 else
                 {
@@ -224,21 +232,67 @@ namespace SimplEnteiner.Core.ResolverService
                 switch (member)
                 {
                     case FieldInfo fieldInfo:
-                        fieldInfo.SetValue(instance, ResolveInternal(fieldInfo.FieldType, context));
+                        fieldInfo.SetValue(instance, ResolveField(fieldInfo, context, implementation));
                         break;
 
                     case PropertyInfo propertyInfo:
-                        propertyInfo.SetValue(instance, ResolveInternal(propertyInfo.PropertyType, context));
+                        propertyInfo.SetValue(instance, ResolveProperty(propertyInfo, context, implementation));
                         break;
 
                     case MethodInfo methodInfo:
-                        object[] methodParameters = methodInfo.GetParameters()
-                            .Select(p => ResolveInternal(p.ParameterType, context))
-                            .ToArray();
+                        object[] methodParameters = ResolveParameters(methodInfo.GetParameters(), context, implementation);
                         methodInfo.Invoke(instance, methodParameters);
                         break;
                 }
             }
+        }
+
+        private object[] ResolveParameters(ParameterInfo[] parameters, ResolutionContext context, Type injectedInto)
+        {
+            object[] result;
+            Type previousRequestType = context.RequestType;
+            context.RequestType = injectedInto;
+
+            try
+            {
+                result = parameters
+                    .Select(p => ResolveInternal(p.ParameterType, context))
+                    .ToArray();
+            }
+            finally
+            {
+                context.RequestType = previousRequestType;
+            }
+
+            return result;
+        }
+
+        private object ResolveField(FieldInfo fieldInfo, ResolutionContext context, Type injectedInto)
+        {
+            return ResolveMember(fieldInfo.FieldType, context, injectedInto);
+        }
+
+        private object ResolveProperty(PropertyInfo propertyInfo, ResolutionContext context, Type injectedInto)
+        {
+            return ResolveMember(propertyInfo.PropertyType, context, injectedInto);
+        }
+
+        private object ResolveMember(Type interfaceType, ResolutionContext context, Type injectedInto)
+        {
+            object result;
+            Type previousRequestType = context.RequestType;
+            context.RequestType = injectedInto;
+
+            try
+            {
+                result = ResolveInternal(interfaceType, context);
+            }
+            finally
+            {
+                context.RequestType = previousRequestType;
+            }
+
+            return result;
         }
 
         private object GetExistingInstance(Registration registration, Type interfaceType, ResolutionContext context)
@@ -280,9 +334,6 @@ namespace SimplEnteiner.Core.ResolverService
 
         private object ResolveDecorators(object instance, Type interfaceType, ResolutionContext context)
         {
-            // TODO
-            // Easy decorators, optimize apply lifetime same as interfaceType lifetime
-
             List<DecoratorRegistration> decorators = context.CurrentScope.GetDecoratorRegistrations(interfaceType);
 
             if (decorators.Count == 0)
@@ -290,15 +341,57 @@ namespace SimplEnteiner.Core.ResolverService
 
             foreach (DecoratorRegistration decorator in decorators)
             {
-                object[] parameters = ResolveConstructorWithArguments(decorator.Constructor, context, instance);
-                instance = decorator.Factory(parameters);
+                object decoratorInstance = null;
+                LifeTime lifetime = decorator.Lifetime;
 
-                InjectMembers(instance, decorator.DecoratorType, context);
-                context.CurrentScope.TrackDisposable(instance);
-                _invoker.Invoke<IInitializable>(instance);
+                if (lifetime == LifeTime.Singleton)
+                    decoratorInstance = context.CurrentScope.GetSingleton(decorator.DecoratorType);
+                else if (lifetime == LifeTime.Scoped)
+                    decoratorInstance = context.CurrentScope.GetScoped(decorator.DecoratorType);
+
+                if (decoratorInstance != null)
+                {
+                    instance = decoratorInstance;
+                    continue;
+                }
+
+                instance = CreateDecoratorInstance(instance, context, decorator, lifetime);
             }
 
             return instance;
+        }
+
+        private object CreateDecoratorInstance(object instance, ResolutionContext context, DecoratorRegistration decorator, LifeTime lifetime)
+        {
+            object decoratorInstance;
+            object[] parameters = ResolveConstructorWithArguments(decorator.DecoratorType, decorator.Constructor, context, instance);
+            decoratorInstance = decorator.Factory(parameters);
+
+            StoreDecorator(context, decoratorInstance, decorator, lifetime);
+            InjectMembers(instance, decorator.DecoratorType, context);
+
+            _invoker.Invoke<IInitializable>(instance);
+
+            return decoratorInstance;
+        }
+
+        private static void StoreDecorator(ResolutionContext context, object decoratorInstance, DecoratorRegistration decorator, LifeTime lifetime)
+        {
+            if (lifetime == LifeTime.Singleton)
+            {
+                context.CurrentScope.StoreSingleton(decorator.DecoratorType, decoratorInstance);
+            }
+            else if (lifetime == LifeTime.Scoped)
+            {
+                context.CurrentScope.StoreScoped(decorator.DecoratorType, decoratorInstance);
+            }
+            else
+            {
+                if (lifetime == LifeTime.Cached)
+                    context.CachedInstances[decorator.DecoratorType] = decoratorInstance;
+
+                context.CurrentScope.TrackDisposable(decoratorInstance);
+            }
         }
     }
 }

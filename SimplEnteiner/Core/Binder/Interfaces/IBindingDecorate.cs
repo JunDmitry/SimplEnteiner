@@ -4,13 +4,11 @@ namespace SimplEnteiner.Core.Binder.Interfaces
 {
     public interface IBindingDecorate<TInterface>
     {
-        IBindingDecorate<TInterface> With<TImplementation>(int? order = null) where TImplementation : TInterface;
-        void Apply();
+        IBindingDecorateLifetime<TInterface> With<TImplementation>(int? order = null) where TImplementation : TInterface;
     }
 
     public interface IBindingDecorate
     {
-        IBindingDecorate With(Type implementation, int? order = null);
-        void Apply();
+        IBindingDecorateLifetime With(Type implementation, int? order = null);
     }
 }

@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Threading.Tasks;
 using SimplEnteiner.Core.Binder;
 using SimplEnteiner.Core.Binder.Implementations;
@@ -190,6 +191,19 @@ namespace SimplEnteiner.Core.ScopeFeature
             bindingBuilder.MarkRegistered();
         }
 
+        void IBindingTarget.RegisterDecorator(BindingBuilderInternal bindingBuilder)
+        {
+            Type interfaceType = bindingBuilder.InterfaceType;
+            Type decoratorType = bindingBuilder.ImplementationType;
+
+            ConstructorInfo ctor = decoratorType.GetInjectableConstructor(Constants.InjectAttributeType)
+                ?? throw new ArgumentException($"No constructor for decorator {decoratorType}");
+            Func<object[], object> factory = ctor.GetFactoryMethod();
+            DecoratorRegistration registration = new DecoratorRegistration(interfaceType, decoratorType, bindingBuilder.Order, bindingBuilder.LifeTime, ctor, factory);
+
+            _registry.AddDecorator(registration);
+        }
+
         internal void ValidateAll()
         {
             _registry.ValidateAll();
@@ -218,7 +232,7 @@ namespace SimplEnteiner.Core.ScopeFeature
             //{
             //    foreach (DecoratorRegistration decorator in decorators)
             //    {
-            //        // TODO make property lifetime and apply this lifetime;
+
             //    }
             //}
 

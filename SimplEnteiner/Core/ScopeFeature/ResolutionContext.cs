@@ -1,5 +1,5 @@
 ﻿using System;
-using System.Collections.Generic;
+using System.Collections.Concurrent;
 
 namespace SimplEnteiner.Core.ScopeFeature
 {
@@ -7,15 +7,17 @@ namespace SimplEnteiner.Core.ScopeFeature
     {
         private bool _disposed;
 
-        public ResolutionContext(Scope scope, object id = null)
+        public ResolutionContext(Scope scope, object id = null, Type requestType = null)
         {
             CurrentScope = scope;
             Id = id;
+            RequestType = requestType;
         }
 
         public Scope CurrentScope { get; private set; }
         public object Id { get; }
-        public Dictionary<Type, object> CachedInstances { get; } = new Dictionary<Type, object>();
+        public Type RequestType { get; set; }
+        public ConcurrentDictionary<Type, object> CachedInstances { get; } = new ConcurrentDictionary<Type, object>();
 
         public void Dispose()
         {

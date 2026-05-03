@@ -45,21 +45,17 @@ namespace SimplEnteiner.Core
                 .AsCached()
                 .Apply();
 
-            // Decorate generic version with 3 decorators
+            // Decorate generic version
             target
                 .Decorate<IBindingOptions>()
                 .With<BindingOptions>(1)
-                .With<BindingOptions>()
-                .With<BindingOptions>(-100)
-                .Apply();
+                .AsSingle();
 
-            // Decorate non-generic version with 3 decorators
+            // Decorate non-generic version
             target
                 .Decorate(typeof(IBindingOptions))
                 .With(typeof(BindingOptions), 1)
-                .With(typeof(BindingOptions))
-                .With(typeof(BindingOptions), -100)
-                .Apply();
+                .AsCached();
         }
     }
 
