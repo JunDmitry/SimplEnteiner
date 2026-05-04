@@ -6,7 +6,6 @@ using SimplEnteiner.Core.Binder;
 using SimplEnteiner.Core.Binder.Implementations;
 using SimplEnteiner.Core.Binder.Interfaces;
 using SimplEnteiner.Core.InstallerService.Interfaces;
-using SimplEnteiner.Core.Lifecycle;
 using SimplEnteiner.Core.ResolverService;
 using SimplEnteiner.Core.ScopeFeature;
 using SimplEnteiner.Utilities;
@@ -74,6 +73,11 @@ namespace SimplEnteiner.Core
         public void Dispose()
         {
             _rootScope.Dispose();
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            await _rootScope.DisposeAsync();
         }
 
         public IBindingTo<TService> Bind<TService>()

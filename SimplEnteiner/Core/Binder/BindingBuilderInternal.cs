@@ -26,6 +26,8 @@ namespace SimplEnteiner.Core.Binder
         public Type ConditionType { get; private set; }
         public object Id { get; private set; }
         public int? Order { get; private set; }
+        public Action<object> OnActivation { get; private set; }
+        public Action<object> OnRelease { get; private set; }
         public bool IsComplete => _state.CurrentIs<FinalStage>();
         public bool IsRegistered { get; private set; }
 
@@ -83,6 +85,16 @@ namespace SimplEnteiner.Core.Binder
 
             Id = id.ThrowIfArgumentNull();
             _state.ChangeTo<OptionsStage>();
+        }
+
+        public void SetOnActivation(Action<object> onActivation)
+        {
+            OnActivation = onActivation;
+        }
+
+        public void SetOnRelease(Action<object> onRelease)
+        {
+            OnRelease = onRelease;
         }
 
         public void AddDecorator(Type type, int? order = null)

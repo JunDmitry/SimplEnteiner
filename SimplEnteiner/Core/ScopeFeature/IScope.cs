@@ -5,7 +5,7 @@ using SimplEnteiner.Core.InstallerService.Interfaces;
 
 namespace SimplEnteiner.Core.ScopeFeature
 {
-    public interface IScope : IDisposable, IBinder
+    public interface IScope : IDisposable, IBinder, IAsyncDisposable
     {
         IScope CreateScope();
         object Resolve(Type type);

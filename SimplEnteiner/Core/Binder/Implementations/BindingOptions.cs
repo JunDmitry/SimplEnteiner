@@ -1,5 +1,6 @@
 ﻿using System;
 using SimplEnteiner.Core.Binder.Interfaces;
+using SimplEnteiner.Utilities;
 
 namespace SimplEnteiner.Core.Binder.Implementations
 {
@@ -17,6 +18,22 @@ namespace SimplEnteiner.Core.Binder.Implementations
         public void Apply()
         {
             _container.Register(_bindingBuilderInternal);
+        }
+
+        public IBindingOptions<TInterface> OnActivation(Action<TInterface> onActivation)
+        {
+            onActivation.ThrowIfArgumentNull();
+            _bindingBuilderInternal.SetOnActivation(obj => onActivation((TInterface)obj));
+
+            return this;
+        }
+
+        public IBindingOptions<TInterface> OnRelease(Action<TInterface> onRelease)
+        {
+            onRelease.ThrowIfArgumentNull();
+            _bindingBuilderInternal.SetOnRelease(obj => onRelease((TInterface)obj));
+
+            return this;
         }
 
         public IBindingOptions<TInterface> WhenInjectedInto<T>()
@@ -55,6 +72,22 @@ namespace SimplEnteiner.Core.Binder.Implementations
         public void Apply()
         {
             _container.Register(_bindingBuilderInternal);
+        }
+
+        public IBindingOptions OnActivation(Action<object> onActivation)
+        {
+            onActivation.ThrowIfArgumentNull();
+            _bindingBuilderInternal.SetOnActivation(onActivation);
+
+            return this;
+        }
+
+        public IBindingOptions OnRelease(Action<object> onRelease)
+        {
+            onRelease.ThrowIfArgumentNull();
+            _bindingBuilderInternal.SetOnRelease(onRelease);
+
+            return this;
         }
 
         public IBindingOptions WhenInjectedInto(Type type)

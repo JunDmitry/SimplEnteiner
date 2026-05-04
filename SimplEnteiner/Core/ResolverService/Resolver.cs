@@ -188,6 +188,7 @@ namespace SimplEnteiner.Core.ResolverService
             StoreInstance(registration, interfaceType, instance, context);
 
             _invoker.Invoke<IInitializable>(instance);
+            registration.OnActivation?.Invoke(instance);
 
             return instance;
         }
@@ -334,22 +335,22 @@ namespace SimplEnteiner.Core.ResolverService
             switch (registration.Lifetime)
             {
                 case LifeTime.Transient:
-                    context.CurrentScope.TrackDisposable(instance);
+                    context.CurrentScope.TrackDisposable(instance, registration.OnRelease);
                     break;
 
                 case LifeTime.Singleton:
                     if (registration.Instance == null)
-                        context.CurrentScope.StoreSingleton(interfaceType, instance);
+                        context.CurrentScope.StoreSingleton(interfaceType, instance, registration.OnRelease);
 
                     break;
 
                 case LifeTime.Cached:
                     context.CachedInstances[interfaceType] = instance;
-                    context.CurrentScope.TrackDisposable(instance);
+                    context.CurrentScope.TrackDisposable(instance, registration.OnRelease);
                     break;
 
                 case LifeTime.Scoped:
-                    context.CurrentScope.StoreScoped(interfaceType, instance);
+                    context.CurrentScope.StoreScoped(interfaceType, instance, registration.OnRelease);
                     break;
             }
         }

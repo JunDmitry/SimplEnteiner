@@ -19,5 +19,7 @@ namespace SimplEnteiner.Core.RegistrationService
         public Func<object[], object> Factory { get; }
         public object Instance { get; }
         public object[] Arguments { get; }
+        public Action<object> OnActivation { get; set; }
+        public Action<object> OnRelease { get; set; }
     }
 }
