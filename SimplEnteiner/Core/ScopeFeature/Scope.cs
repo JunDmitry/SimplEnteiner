@@ -102,7 +102,7 @@ namespace SimplEnteiner.Core.ScopeFeature
         {
             object instance = Resolve(interfaceType);
 
-            await _interfaceInvoker.InvokeAsync<ILateInitializable>(instance);
+            await _interfaceInvoker.InvokeAsync<IAsyncInitializable>(instance);
 
             return instance;
         }
@@ -126,7 +126,7 @@ namespace SimplEnteiner.Core.ScopeFeature
         {
             object instance = Resolve(interfaceType, id);
 
-            await _interfaceInvoker.InvokeAsync<ILateInitializable>(instance);
+            await _interfaceInvoker.InvokeAsync<IAsyncInitializable>(instance);
 
             return instance;
         }
@@ -228,14 +228,6 @@ namespace SimplEnteiner.Core.ScopeFeature
                 }
             }
 
-            //foreach (List<DecoratorRegistration> decorators in _registry.DecoratorBindings.Values)
-            //{
-            //    foreach (DecoratorRegistration decorator in decorators)
-            //    {
-
-            //    }
-            //}
-
             for (int i = 0; i < _childrens.Count; i++)
                 _childrens[i].Start();
         }
@@ -297,21 +289,53 @@ namespace SimplEnteiner.Core.ScopeFeature
 
         internal List<DecoratorRegistration> GetDecoratorRegistrations(Type interfaceType)
         {
-            List<DecoratorRegistration > registrations = new List<DecoratorRegistration>();
-            Stack<Scope> scopes = new Stack<Scope>();
-            
-            for (Scope scope = this; scope != null; scope = scope.Parent)
-                scopes.Push(scope);
+            List<DecoratorRegistration> registrations = new List<DecoratorRegistration>();
+            List<Scope> scopes = new List<Scope>();
 
-            while (scopes.Count > 0)
+            for (Scope scope = this; scope != null; scope = scope.Parent)
+                scopes.Add(scope);
+
+            AddExactDecoratorRegistrations(interfaceType, registrations, scopes);
+
+            if ((interfaceType.IsGenericType == false) || interfaceType.IsGenericTypeDefinition)
+                return registrations;
+
+            AddGenericDecoratorRegistrations(interfaceType, registrations, scopes);
+
+            return registrations;
+        }
+
+        private static void AddGenericDecoratorRegistrations(Type interfaceType, List<DecoratorRegistration> registrations, List<Scope> scopes)
+        {
+            Type openDeginition = interfaceType.GetGenericTypeDefinition();
+            Type[] arguments = interfaceType.GetGenericArguments();
+
+            for (int i = scopes.Count - 1; i >= 0; i--)
             {
-                Scope scope = scopes.Pop();
+                Scope scope = scopes[i];
+
+                if (scope._registry.DecoratorBindings.TryGetValue(openDeginition, out List<DecoratorRegistration> inner) == false)
+                    continue;
+
+                foreach (DecoratorRegistration registration in inner)
+                {
+                    Type closedDecorator = registration.DecoratorType.IsGenericTypeDefinition
+                        ? registration.DecoratorType.MakeGenericType(arguments)
+                        : registration.DecoratorType;
+                    registrations.Add(new DecoratorRegistration(interfaceType, closedDecorator, registration.Order, registration.Lifetime, null, null));
+                }
+            }
+        }
+
+        private static void AddExactDecoratorRegistrations(Type interfaceType, List<DecoratorRegistration> registrations, List<Scope> scopes)
+        {
+            for (int i = scopes.Count - 1; i >= 0; i--)
+            {
+                Scope scope = scopes[i];
 
                 if (scope._registry.DecoratorBindings.TryGetValue(interfaceType, out List<DecoratorRegistration> inner))
                     registrations.AddRange(inner);
             }
-
-            return registrations;
         }
 
         internal void StoreSingleton(Type interfaceType, object instance)

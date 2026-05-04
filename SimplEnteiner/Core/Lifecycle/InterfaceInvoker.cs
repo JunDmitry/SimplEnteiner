@@ -19,8 +19,8 @@ namespace SimplEnteiner.Core.Lifecycle
         {
             Type type = typeof(T);
 
-            if (type == typeof(ILateInitializable))
-                await (instance as ILateInitializable)?.InitializeAsync();
+            if (type == typeof(IAsyncInitializable))
+                await (instance as IAsyncInitializable)?.InitializeAsync();
         }
     }
 }

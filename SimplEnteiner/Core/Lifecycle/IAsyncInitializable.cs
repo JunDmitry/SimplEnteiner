@@ -2,7 +2,7 @@
 
 namespace SimplEnteiner.Core.Lifecycle
 {
-    public interface ILateInitializable
+    public interface IAsyncInitializable
     {
         Task InitializeAsync();
     }
