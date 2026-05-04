@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
+using SimplEnteiner.Core.Attributes;
 using SimplEnteiner.Core.Lifecycle;
 using SimplEnteiner.Core.RegistrationService;
 using SimplEnteiner.Core.ScopeFeature;
@@ -213,7 +214,7 @@ namespace SimplEnteiner.Core.ResolverService
 
                 if (selectedArgument == -1)
                 {
-                    result[i] = ResolveMember(parameterType, context, implementation);
+                    result[i] = ResolveMember(parameterType, context, implementation, parameters[i].GetCustomAttribute<IdAttribute>()?.Id);
                 }
                 else
                 {
@@ -249,15 +250,28 @@ namespace SimplEnteiner.Core.ResolverService
 
         private object[] ResolveParameters(ParameterInfo[] parameters, ResolutionContext context, Type injectedInto)
         {
-            object[] result;
+            object[] result = new object[parameters.Length];
             Type previousRequestType = context.RequestType;
             context.RequestType = injectedInto;
 
             try
             {
-                result = parameters
-                    .Select(p => ResolveInternal(p.ParameterType, context))
-                    .ToArray();
+                Type parameterType;
+                IdAttribute idAttribute;
+
+                for (int i = 0; i < parameters.Length; i++)
+                {
+                    parameterType = parameters[i].ParameterType;
+                    idAttribute = parameters[i].GetCustomAttribute<IdAttribute>();
+                    
+                    object previousId = context.Id;
+
+                    if (idAttribute != null)
+                        context.Id = idAttribute.Id;
+
+                    result[i] = ResolveInternal(parameterType, context);
+                    context.Id = previousId;
+                }
             }
             finally
             {
@@ -269,15 +283,15 @@ namespace SimplEnteiner.Core.ResolverService
 
         private object ResolveField(FieldInfo fieldInfo, ResolutionContext context, Type injectedInto)
         {
-            return ResolveMember(fieldInfo.FieldType, context, injectedInto);
+            return ResolveMember(fieldInfo.FieldType, context, injectedInto, fieldInfo.GetCustomAttribute<IdAttribute>()?.Id);
         }
 
         private object ResolveProperty(PropertyInfo propertyInfo, ResolutionContext context, Type injectedInto)
         {
-            return ResolveMember(propertyInfo.PropertyType, context, injectedInto);
+            return ResolveMember(propertyInfo.PropertyType, context, injectedInto, propertyInfo.GetCustomAttribute<IdAttribute>()?.Id);
         }
 
-        private object ResolveMember(Type interfaceType, ResolutionContext context, Type injectedInto)
+        private object ResolveMember(Type interfaceType, ResolutionContext context, Type injectedInto, object id = null)
         {
             object result;
             Type previousRequestType = context.RequestType;
@@ -285,7 +299,13 @@ namespace SimplEnteiner.Core.ResolverService
 
             try
             {
+                object previousId = context.Id;
+
+                if (id != null)
+                    context.Id = id;
+
                 result = ResolveInternal(interfaceType, context);
+                context.Id = previousId;
             }
             finally
             {
@@ -363,9 +383,18 @@ namespace SimplEnteiner.Core.ResolverService
 
         private object CreateDecoratorInstance(object instance, ResolutionContext context, DecoratorRegistration decorator, LifeTime lifetime)
         {
+            ConstructorInfo ctor = decorator.Constructor;
+            Func<object[], object> factory = decorator.Factory;
+
+            if (ctor == null || factory == null)
+            {
+                ctor = decorator.DecoratorType.GetInjectableConstructor(s_injectAttributeType);
+                factory = ctor.GetFactoryMethod();
+            }
+
             object decoratorInstance;
-            object[] parameters = ResolveConstructorWithArguments(decorator.DecoratorType, decorator.Constructor, context, instance);
-            decoratorInstance = decorator.Factory(parameters);
+            object[] parameters = ResolveConstructorWithArguments(decorator.DecoratorType, ctor, context, instance);
+            decoratorInstance = factory(parameters);
 
             StoreDecorator(context, decoratorInstance, decorator, lifetime);
             InjectMembers(instance, decorator.DecoratorType, context);

@@ -15,7 +15,7 @@ namespace SimplEnteiner.Core.ScopeFeature
         }
 
         public Scope CurrentScope { get; private set; }
-        public object Id { get; }
+        public object Id { get; set; }
         public Type RequestType { get; set; }
         public ConcurrentDictionary<Type, object> CachedInstances { get; } = new ConcurrentDictionary<Type, object>();
 

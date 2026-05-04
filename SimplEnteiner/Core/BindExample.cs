@@ -56,6 +56,16 @@ namespace SimplEnteiner.Core
                 .Decorate(typeof(IBindingOptions))
                 .With(typeof(BindingOptions), 1)
                 .AsCached();
+
+            // Decorate open-generic definition version
+            target.Decorate(typeof(IBindingOptions<>))
+                .With(typeof(BindingDecorate<>))
+                .AsSingle();
+
+            // Decorate open-generic definition version with closed generic definition
+            target.Decorate(typeof(IBindingOptions<>))
+                .With(typeof(BindingDecorate<ICloneable>))
+                .AsSingle();
         }
     }
 

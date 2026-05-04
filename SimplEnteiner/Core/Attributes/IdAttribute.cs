@@ -1,10 +1,15 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Text;
 
 namespace SimplEnteiner.Core.Attributes
 {
-    internal class IdAttribute
+    [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property | AttributeTargets.Parameter, AllowMultiple = false)]
+    public class IdAttribute : Attribute
     {
+        public IdAttribute(object id)
+        {
+            Id = id;
+        }
+
+        public object Id { get; }
     }
 }

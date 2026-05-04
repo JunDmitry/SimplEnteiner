@@ -139,16 +139,25 @@ namespace SimplEnteiner.Core.RegistrationService
             Type interfaceType = registration.InterfaceType;
             Type decoratorType = registration.DecoratorType;
 
-            ValidateFirstStep(interfaceType, decoratorType);
+            if (decoratorType.IsGenericTypeDefinition)
+            {
+                if (decoratorType.IsAssignableToGenericTypeDefinition(interfaceType) == false)
+                    throw new InvalidOperationException($"Open generic decorator {decoratorType} must implement {interfaceType}.");
+            }
+            else
+            {
+                ValidateFirstStep(interfaceType, decoratorType);
 
-            ConstructorInfo constructor = decoratorType.GetInjectableConstructor(Constants.InjectAttributeType)
-                ?? throw new ArgumentException($"No public constructor found for {decoratorType}.");
-            bool hasDecoratorParameter = constructor.GetParameters().Any(p => interfaceType.IsAssignableFrom(p.ParameterType));
+                ConstructorInfo constructor = decoratorType.GetInjectableConstructor(Constants.InjectAttributeType)
+                    ?? throw new ArgumentException($"No public constructor found for {decoratorType}.");
+                bool hasDecoratorParameter = constructor.GetParameters().Any(p => interfaceType.IsAssignableFrom(p.ParameterType));
 
-            if (hasDecoratorParameter == false)
-                throw new InvalidOperationException($"Decorator {decoratorType} must have a constructor parameter assignable to {interfaceType}.");
+                if (hasDecoratorParameter == false)
+                    throw new InvalidOperationException($"Decorator {decoratorType} must have a constructor parameter assignable to {interfaceType}.");
 
-            ValidateSecondStep(interfaceType, decoratorType);
+                ValidateSecondStep(interfaceType, decoratorType);
+            }
+
         }
 
         private static void ValidateFirstStep(Type interfaceType, Type implementationType)

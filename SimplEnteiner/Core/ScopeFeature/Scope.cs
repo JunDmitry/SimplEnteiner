@@ -297,12 +297,23 @@ namespace SimplEnteiner.Core.ScopeFeature
 
             AddExactDecoratorRegistrations(interfaceType, registrations, scopes);
 
-            if ((interfaceType.IsGenericType == false) || interfaceType.IsGenericTypeDefinition)
-                return registrations;
+            if (interfaceType.IsGenericType && (interfaceType.IsGenericTypeDefinition == false))
+                AddGenericDecoratorRegistrations(interfaceType, registrations, scopes);
 
-            AddGenericDecoratorRegistrations(interfaceType, registrations, scopes);
+            scopes.Clear();
 
             return registrations;
+        }
+
+        private static void AddExactDecoratorRegistrations(Type interfaceType, List<DecoratorRegistration> registrations, List<Scope> scopes)
+        {
+            for (int i = scopes.Count - 1; i >= 0; i--)
+            {
+                Scope scope = scopes[i];
+
+                if (scope._registry.DecoratorBindings.TryGetValue(interfaceType, out List<DecoratorRegistration> inner))
+                    registrations.AddRange(inner);
+            }
         }
 
         private static void AddGenericDecoratorRegistrations(Type interfaceType, List<DecoratorRegistration> registrations, List<Scope> scopes)
@@ -324,17 +335,6 @@ namespace SimplEnteiner.Core.ScopeFeature
                         : registration.DecoratorType;
                     registrations.Add(new DecoratorRegistration(interfaceType, closedDecorator, registration.Order, registration.Lifetime, null, null));
                 }
-            }
-        }
-
-        private static void AddExactDecoratorRegistrations(Type interfaceType, List<DecoratorRegistration> registrations, List<Scope> scopes)
-        {
-            for (int i = scopes.Count - 1; i >= 0; i--)
-            {
-                Scope scope = scopes[i];
-
-                if (scope._registry.DecoratorBindings.TryGetValue(interfaceType, out List<DecoratorRegistration> inner))
-                    registrations.AddRange(inner);
             }
         }
 
