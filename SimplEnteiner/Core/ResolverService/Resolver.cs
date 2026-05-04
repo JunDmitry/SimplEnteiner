@@ -179,7 +179,9 @@ namespace SimplEnteiner.Core.ResolverService
                 return instance;
 
             ConstructorInfo ctor = registration.Implementation.GetInjectableConstructor(s_injectAttributeType);
-            object[] parameters = ResolveParameters(ctor.GetParameters(), context, registration.Implementation);
+            object[] parameters = registration.Arguments.Length == 0 
+                ? ResolveParameters(ctor.GetParameters(), context, registration.Implementation)
+                : ResolveConstructorWithArguments(registration.Implementation, ctor, context, registration.Arguments);
             instance = registration.Factory(parameters);
 
             InjectMembers(instance, registration.Implementation, context);

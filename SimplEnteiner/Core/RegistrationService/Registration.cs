@@ -5,17 +5,19 @@ namespace SimplEnteiner.Core.RegistrationService
 {
     internal class Registration
     {
-        public Registration(Type implementation, LifeTime lifetime, Func<object[], object> factory, object instance)
+        public Registration(Type implementation, LifeTime lifetime, Func<object[], object> factory, object instance, object[] arguments = null)
         {
             Implementation = implementation;
             Lifetime = lifetime;
             Factory = factory;
             Instance = instance;
+            Arguments = arguments ?? Array.Empty<object>();
         }
 
         public Type Implementation { get; }
         public LifeTime Lifetime { get; }
         public Func<object[], object> Factory { get; }
         public object Instance { get; }
+        public object[] Arguments { get; }
     }
 }

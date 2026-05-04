@@ -1,4 +1,5 @@
 ﻿using System;
+using SimplEnteiner.Core.Attributes;
 using SimplEnteiner.Core.Binder.Implementations;
 using SimplEnteiner.Core.Binder.Interfaces;
 using SimplEnteiner.Core.InstallerService.Interfaces;
@@ -77,6 +78,18 @@ namespace SimplEnteiner.Core
 
             container.ScanAndInstall();
             container.Build();
+        }
+    }
+
+    internal class TestExample
+    {
+        [Id("fieldId")] private IBindingTo _testField;
+
+        [Id("propertyId")] public IBindingLifetime Lifetime { get; }
+
+        public TestExample([Id(5)] IBindingOptions options)
+        {
+            
         }
     }
 }

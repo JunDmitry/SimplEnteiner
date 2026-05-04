@@ -202,11 +202,12 @@ namespace SimplEnteiner.Core.RegistrationService
                 : constructor.GetFactoryMethod();
             object instance = builder.Instance;
             LifeTime lifeTime = builder.LifeTime;
+            object[] arguments = builder.Arguments?.ToArray() ?? Array.Empty<object>();
 
             if (instance != null)
                 lifeTime = LifeTime.Singleton;
 
-            return new Registration(implementationType, lifeTime, factory, instance);
+            return new Registration(implementationType, lifeTime, factory, instance, arguments);
         }
     }
 }
