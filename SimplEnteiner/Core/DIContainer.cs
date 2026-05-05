@@ -1,10 +1,13 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
+using System.Text.Json;
 using System.Threading.Tasks;
 using SimplEnteiner.Core.Binder;
 using SimplEnteiner.Core.Binder.Implementations;
 using SimplEnteiner.Core.Binder.Interfaces;
+using SimplEnteiner.Core.Configuration;
 using SimplEnteiner.Core.InstallerService.Interfaces;
 using SimplEnteiner.Core.ResolverService;
 using SimplEnteiner.Core.ScopeFeature;
@@ -15,14 +18,23 @@ namespace SimplEnteiner.Core
     public class DIContainer : IScope, IBindingTarget
     {
         private readonly List<BindingBuilderInternal> _pendingBindings;
-        private readonly Scope _rootScope;
         private readonly IResolver _resolver;
+        private readonly Serializer _serializer = new Serializer();
+        
+        private Scope _rootScope;
 
         public DIContainer()
         {
             _resolver = new Resolver();
             _pendingBindings = new List<BindingBuilderInternal>();
             _rootScope = new Scope((t, s, id) => _resolver.Resolve(t, s, id));
+        }
+
+        internal DIContainer(ScopeConfig rootScopeConfig)
+        {
+            _resolver = new Resolver();
+            _pendingBindings = new List<BindingBuilderInternal>();
+            _rootScope = new Scope((t, s, id) => _resolver.Resolve(t, s, id), rootScopeConfig);
         }
 
         public TService Resolve<TService>()
@@ -83,8 +95,8 @@ namespace SimplEnteiner.Core
         public IBindingTo<TService> Bind<TService>()
         {
             BindingBuilderInternal bindingBuilder = new BindingBuilderInternal(typeof(TService));
-            
-            lock(_pendingBindings) 
+
+            lock (_pendingBindings)
                 _pendingBindings.Add(bindingBuilder);
 
             return new BindingTo<TService>(bindingBuilder, this);
@@ -95,8 +107,8 @@ namespace SimplEnteiner.Core
             serviceType.ThrowIfArgumentNull();
 
             BindingBuilderInternal bindingBuilder = new BindingBuilderInternal(serviceType);
-           
-            lock(_pendingBindings)
+
+            lock (_pendingBindings)
                 _pendingBindings.Add(bindingBuilder);
 
             return new BindingTo(bindingBuilder, this);
@@ -141,6 +153,21 @@ namespace SimplEnteiner.Core
             _rootScope.Start();
         }
 
+        public string ExportConfiguration()
+        {
+            return _serializer.Serialize(this);
+        }
+
+        public void ImportConfiguration(string jsonConfiguration)
+        {
+            _rootScope?.Dispose();
+            _pendingBindings.Clear();
+
+            _rootScope = new Scope((t, s, id) => _resolver.Resolve(t, s, id));
+            _rootScope.InitializeFromDto(_serializer.DeserializeInternal(jsonConfiguration));
+            Build();
+        }
+
         void IBindingTarget.Register(BindingBuilderInternal builder)
         {
             if (RegisterWithoutRemove(builder) == false)
@@ -165,6 +192,26 @@ namespace SimplEnteiner.Core
             builder.MarkRegistered();
 
             return true;
+        }
+
+        public sealed class Serializer
+        {
+            private readonly Scope.Serializer _serializer = new Scope.Serializer();
+
+            public string Serialize(DIContainer container)
+            {
+                return _serializer.Serialize(container._rootScope);
+            }
+
+            public DIContainer Deserialize(string json)
+            {
+                return _serializer.Deserialize(json);
+            }
+
+            internal ScopeConfig DeserializeInternal(string json)
+            {
+                return JsonSerializer.Deserialize<ScopeConfig>(json);
+            }
         }
     }
 }

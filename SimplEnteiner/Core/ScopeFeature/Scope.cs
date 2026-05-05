@@ -47,6 +47,16 @@ namespace SimplEnteiner.Core.ScopeFeature
             _interfaceInvoker = new InterfaceInvoker();
         }
 
+        internal Scope(ResolverFunc resolver, ScopeConfig scopeConfig) : this(resolver)
+        {
+            InitializeFromDto(scopeConfig);
+        }
+
+        internal Scope(Scope parent, ScopeConfig scopeConfig) : this(parent)
+        {
+            InitializeFromDto(scopeConfig);
+        }
+
         protected Scope(Scope parent)
         {
             Parent = parent.ThrowIfArgumentNull();
@@ -346,6 +356,92 @@ namespace SimplEnteiner.Core.ScopeFeature
             return registrations;
         }
 
+        internal void StoreSingleton(Type interfaceType, object instance, Action<object> onRelease = null)
+        {
+            lock (_singletonLock)
+            {
+                _singletons[interfaceType] = instance;
+                _root._cleanupService.AddIfDisposable(instance, onRelease);
+            }
+        }
+
+        internal void StoreScoped(Type interfaceType, object instance, Action<object> onRelease = null)
+        {
+            lock (_scopedLock)
+            {
+                _scopedInstances[interfaceType] = instance;
+                TrackDisposable(instance, onRelease);
+            }
+        }
+
+        internal void TrackDisposable(object instance, Action<object> onRelease = null)
+        {
+            _cleanupService.AddIfDisposable(instance, onRelease);
+        }
+
+        internal void InitializeFromDto(ScopeConfig scopeConfig)
+        {
+            foreach (BindingConfig exactBinding in scopeConfig.ExactBindings)
+            {
+                (Type key, Registration value) = DeserializeRegistration(exactBinding);
+                _registry.AddExactRegistration(key, value);
+            }
+
+            foreach (BindingConfig openConfig in scopeConfig.OpenGenericBindings)
+            {
+                (Type key, Registration value) = DeserializeRegistration(openConfig);
+                _registry.AddOpenGenericRegistration(key, value);
+            }
+
+            foreach (BindingConfig conditionalConfig in scopeConfig.ConditionalBindings)
+            {
+                object id = string.IsNullOrEmpty(conditionalConfig.Id)
+                    ? (string.IsNullOrEmpty(conditionalConfig.Condition)
+                        ? null
+                        : Type.GetType(conditionalConfig.Condition))
+                    : JsonSerializer.Deserialize<object>(conditionalConfig.Id);
+                (Type key, Registration value) = DeserializeRegistration(conditionalConfig);
+                _registry.AddConditionalRegistration(key, id, value);
+            }
+
+            foreach (DecoratorConfig decoratorConfig in scopeConfig.DecoratorBindings)
+            {
+                DecoratorRegistration decoratorRegistration = new DecoratorRegistration(
+                    Type.GetType(decoratorConfig.InterfaceType),
+                    Type.GetType(decoratorConfig.DecoratorType),
+                    decoratorConfig.Order,
+                    Enum.Parse<LifeTime>(decoratorConfig.Lifetime),
+                    null,
+                    null);
+                _registry.AddDecorator(decoratorRegistration);
+            }
+
+            if (scopeConfig.Childrens.Count > 0)
+                foreach (ScopeConfig child in scopeConfig.Childrens)
+                    CreateScope(child);
+        }
+
+        private (Type Key, Registration Value) DeserializeRegistration(BindingConfig bindingConfig)
+        {
+            Type type = Type.GetType(bindingConfig.ImplementationType);
+
+            return (Type.GetType(bindingConfig.InterfaceType),
+                new Registration(
+                    type,
+                    Enum.Parse<LifeTime>(bindingConfig.Lifetime),
+                    null,
+                    JsonSerializer.Deserialize(bindingConfig.InstanceJson, type),
+                    bindingConfig.ArgumentsJson.Select(a => JsonSerializer.Deserialize<object>(a)).ToArray()));
+        }
+
+        private void CreateScope(ScopeConfig scopeConfig)
+        {
+            Scope child = new Scope(this, scopeConfig);
+
+            lock (_childrens)
+                _childrens.Add(child);
+        }
+
         private static void AddExactDecoratorRegistrations(Type interfaceType, List<DecoratorRegistration> registrations, List<Scope> scopes)
         {
             for (int i = scopes.Count - 1; i >= 0; i--)
@@ -379,29 +475,6 @@ namespace SimplEnteiner.Core.ScopeFeature
             }
         }
 
-        internal void StoreSingleton(Type interfaceType, object instance, Action<object> onRelease = null)
-        {
-            lock (_singletonLock)
-            {
-                _singletons[interfaceType] = instance;
-                _root._cleanupService.AddIfDisposable(instance, onRelease);
-            }
-        }
-
-        internal void StoreScoped(Type interfaceType, object instance, Action<object> onRelease = null)
-        {
-            lock (_scopedLock)
-            {
-                _scopedInstances[interfaceType] = instance;
-                TrackDisposable(instance, onRelease);
-            }
-        }
-
-        internal void TrackDisposable(object instance, Action<object> onRelease = null)
-        {
-            _cleanupService.AddIfDisposable(instance, onRelease);
-        }
-
         private IReadOnlyDictionary<Type, Registration> GetAllRegistration(Func<Scope, IReadOnlyDictionary<Type, Registration>> selector)
         {
             Dictionary<Type, Registration> allRegistrations = new Dictionary<Type, Registration>();
@@ -433,21 +506,18 @@ namespace SimplEnteiner.Core.ScopeFeature
             return null;
         }
 
-        public sealed class Serializer
+        internal sealed class Serializer
         {
-            public string Serialize(Scope scope)
+            public string Serialize(Scope container)
             {
-                return JsonSerializer.Serialize(GetConfig(scope));
+                return JsonSerializer.Serialize(GetConfig(container));
             }
 
             public DIContainer Deserialize(string json)
             {
                 ScopeConfig config = JsonSerializer.Deserialize<ScopeConfig>(json);
-                DIContainer container = new DIContainer();
-                FieldInfo fieldInfo = typeof(DIContainer).GetField("_rootScope", BindingFlags.Instance | BindingFlags.NonPublic);
-                Scope rootScope = (Scope) fieldInfo.GetValue(container);
 
-                throw new NotImplementedException();
+                return new DIContainer(config);
             }
 
             private ScopeConfig GetConfig(Scope scope)
@@ -490,19 +560,6 @@ namespace SimplEnteiner.Core.ScopeFeature
                     Id = id == null ? string.Empty : JsonSerializer.Serialize(id),
                     Condition = condition == null ? string.Empty : condition.AssemblyQualifiedName,
                 };
-            }
-
-            private (Type Key, Registration Value) DeserializeRegistration(BindingConfig bindingConfig)
-            {
-                Type type = Type.GetType(bindingConfig.ImplementationType);
-
-                return (Type.GetType(bindingConfig.InterfaceType),
-                    new Registration(
-                        type,
-                        Enum.Parse<LifeTime>(bindingConfig.Lifetime),
-                        null,
-                        JsonSerializer.Deserialize(bindingConfig.InstanceJson, type),
-                        bindingConfig.ArgumentsJson.Select(a => JsonSerializer.Deserialize<object>(a)).ToArray()));
             }
 
             private DecoratorConfig SerializeRegistrationDecorator(DecoratorRegistration registration)
