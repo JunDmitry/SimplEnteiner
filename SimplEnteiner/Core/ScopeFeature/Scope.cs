@@ -9,6 +9,8 @@ using SimplEnteiner.Core.Binder;
 using SimplEnteiner.Core.Binder.Implementations;
 using SimplEnteiner.Core.Binder.Interfaces;
 using SimplEnteiner.Core.Configuration;
+using SimplEnteiner.Core.ConventionBinding.Implementations;
+using SimplEnteiner.Core.ConventionBinding.Interfaces;
 using SimplEnteiner.Core.InstallerService.Interfaces;
 using SimplEnteiner.Core.Lifecycle;
 using SimplEnteiner.Core.RegistrationService;
@@ -230,6 +232,22 @@ namespace SimplEnteiner.Core.ScopeFeature
             BindingBuilderInternal builderInternal = new BindingBuilderInternal(interfaceType);
 
             return new BindingDecorate(builderInternal, this);
+        }
+
+        public void BindConvention(Action<IConventionBuilder> configure)
+        {
+            ConventionBuilder builder = new ConventionBuilder(this);
+            configure.ThrowIfArgumentNull().Invoke(builder);
+
+            builder.Build();
+        }
+
+        public void AnalyzeReachability(IEnumerable<Type> roots, Type injectAttribute)
+        {
+            _registry.AnalyzeReachability(roots, injectAttribute);
+
+            foreach (Scope children in _childrens)
+                children.AnalyzeReachability(roots, injectAttribute);
         }
 
         void IBindingTarget.Register(BindingBuilderInternal bindingBuilder)

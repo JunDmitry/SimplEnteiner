@@ -1,4 +1,5 @@
 ﻿using System;
+using SimplEnteiner.Core.ConventionBinding.Interfaces;
 
 namespace SimplEnteiner.Core.Binder.Interfaces
 {
@@ -9,5 +10,6 @@ namespace SimplEnteiner.Core.Binder.Interfaces
         public IBindingTo Bind(Type interfaceType);
         IBindingDecorate<TService> Decorate<TService>();
         IBindingDecorate Decorate(Type interfaceType);
+        void BindConvention(Action<IConventionBuilder> configure);
     }
 }

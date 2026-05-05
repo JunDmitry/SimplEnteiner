@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using SimplEnteiner.Analysis;
 using SimplEnteiner.Core.Binder;
 using SimplEnteiner.Core.Lifecycle;
 using SimplEnteiner.Core.ScopeFeature;
@@ -28,6 +29,30 @@ namespace SimplEnteiner.Core.RegistrationService
         public IReadOnlyDictionary<Type, Registration> OpenGenericBindings => _openGenericBindings;
         public IReadOnlyDictionary<ConditionalKey, Registration> ConditionalBindings => _conditionalBindings;
         public IReadOnlyDictionary<Type, List<DecoratorRegistration>> DecoratorBindings => _decoratorBindings;
+
+        public void AnalyzeReachability(IEnumerable<Type> roots, Type injectAttribute)
+        {
+            Dictionary<Type, Type> allExact = new Dictionary<Type, Type>();
+
+            foreach (KeyValuePair<Type, Registration> pair in _exactBindings)
+                allExact[pair.Key] = pair.Value.Implementation;
+
+            HashSet<Type> reachable = ReachabilityAnalyzer.Instance.ComputeReachability(roots, allExact, injectAttribute);
+
+            List<Type> unreachable = _exactBindings.Keys.Except(reachable).ToList();
+            List<Type> missing = reachable.Where(t => (allExact.ContainsKey(t) == false) && (t.IsConcreteClass() == false)).ToList();
+
+            string message = string.Empty;
+
+            if (unreachable.Count > 0)
+                message += $"Unreachable services: {string.Join(", ", unreachable)}. ";
+
+            if (missing.Count > 0)
+                message += $"\nMissing bindings for: {string.Join(", ", missing)}";
+
+            if (string.IsNullOrEmpty(message) == false)
+                throw new InvalidOperationException(message);
+        }
 
         internal void Add(BindingBuilderInternal builder)
         {

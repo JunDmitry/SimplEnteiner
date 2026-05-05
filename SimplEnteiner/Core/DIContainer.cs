@@ -8,6 +8,8 @@ using SimplEnteiner.Core.Binder;
 using SimplEnteiner.Core.Binder.Implementations;
 using SimplEnteiner.Core.Binder.Interfaces;
 using SimplEnteiner.Core.Configuration;
+using SimplEnteiner.Core.ConventionBinding.Implementations;
+using SimplEnteiner.Core.ConventionBinding.Interfaces;
 using SimplEnteiner.Core.InstallerService.Interfaces;
 using SimplEnteiner.Core.ResolverService;
 using SimplEnteiner.Core.ScopeFeature;
@@ -114,6 +116,15 @@ namespace SimplEnteiner.Core
             return new BindingTo(bindingBuilder, this);
         }
 
+        public void BindConvention(Action<IConventionBuilder> configure)
+        {
+            ConventionBuilder builder = new ConventionBuilder(this);
+            configure.ThrowIfArgumentNull().Invoke(builder);
+
+            builder.Build();
+            BuildPendings();
+        }
+
         public IBindingDecorate<TService> Decorate<TService>()
         {
             BindingBuilderInternal builderInternal = new BindingBuilderInternal(typeof(TService));
@@ -136,18 +147,7 @@ namespace SimplEnteiner.Core
 
         public void Build()
         {
-            List<BindingBuilderInternal> pendingBindingsCopy;
-
-            lock (_pendingBindings)
-                pendingBindingsCopy = _pendingBindings.ToList();
-
-            foreach (BindingBuilderInternal bindingBuilder in pendingBindingsCopy)
-            {
-                RegisterWithoutRemove(bindingBuilder);
-            }
-
-            lock (_pendingBindings)
-                _pendingBindings.Clear();
+            BuildPendings();
 
             _rootScope.ValidateAll();
             _rootScope.Start();
@@ -168,6 +168,11 @@ namespace SimplEnteiner.Core
             Build();
         }
 
+        public void AnalyzeReachability(IEnumerable<Type> roots, Type injectAttribute)
+        {
+            _rootScope.AnalyzeReachability(roots, injectAttribute);
+        }
+
         void IBindingTarget.Register(BindingBuilderInternal builder)
         {
             if (RegisterWithoutRemove(builder) == false)
@@ -180,6 +185,22 @@ namespace SimplEnteiner.Core
         void IBindingTarget.RegisterDecorator(BindingBuilderInternal bindingBuilder)
         {
             ((IBindingTarget)_rootScope).RegisterDecorator(bindingBuilder);
+        }
+
+        private void BuildPendings()
+        {
+            List<BindingBuilderInternal> pendingBindingsCopy;
+
+            lock (_pendingBindings)
+                pendingBindingsCopy = _pendingBindings.ToList();
+
+            foreach (BindingBuilderInternal bindingBuilder in pendingBindingsCopy)
+            {
+                RegisterWithoutRemove(bindingBuilder);
+            }
+
+            lock (_pendingBindings)
+                _pendingBindings.Clear();
         }
 
         private bool RegisterWithoutRemove(BindingBuilderInternal builder)
