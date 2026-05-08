@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using SimplEnteiner.Core.Binder.Interfaces;
 using SimplEnteiner.Core.InstallerService.Interfaces;
@@ -7,6 +8,10 @@ namespace SimplEnteiner.Core.ScopeFeature
 {
     public interface IScope : IDisposable, IBinder, IAsyncDisposable
     {
+        IScope Parent { get; }
+
+        IScope[] GetChildrens();
+        void GetChildrens(List<IScope> results);
         IScope CreateScope();
         object Resolve(Type type);
         T Resolve<T>();
@@ -17,5 +22,6 @@ namespace SimplEnteiner.Core.ScopeFeature
         Task<object> ResolveAsync(Type type, object id);
         Task<T> ResolveAsync<T>(object id);
         void Install(IInstaller installer);
+        void Build();
     }
 }

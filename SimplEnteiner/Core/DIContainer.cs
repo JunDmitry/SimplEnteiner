@@ -39,6 +39,8 @@ namespace SimplEnteiner.Core
             _rootScope = new Scope((t, s, id) => _resolver.Resolve(t, s, id), rootScopeConfig);
         }
 
+        public IScope Parent => _rootScope.Parent;
+
         public TService Resolve<TService>()
         {
             return _rootScope.Resolve<TService>();
@@ -77,6 +79,16 @@ namespace SimplEnteiner.Core
         public async Task<T> ResolveAsync<T>(object id)
         {
             return await _rootScope.ResolveAsync<T>(id);
+        }
+
+        public IScope[] GetChildrens()
+        {
+            return _rootScope.GetChildrens();
+        }
+
+        public void GetChildrens(List<IScope> results)
+        {
+            _rootScope.GetChildrens(results);
         }
 
         public IScope CreateScope()
@@ -149,8 +161,7 @@ namespace SimplEnteiner.Core
         {
             BuildPendings();
 
-            _rootScope.ValidateAll();
-            _rootScope.Start();
+            _rootScope.Build();
         }
 
         public string ExportConfiguration()

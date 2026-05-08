@@ -23,6 +23,8 @@ namespace SimplEnteiner
         private static List<Type> s_cachedDomainTypes = null;
         private static bool s_initialized = false;
 
+        // TODO: Cache for reflection calls
+
         /// <summary>
         /// Find all non-abstract class types assignable from type with option generic search flag. 
         /// Analysis all assemblies in CurrentDomain

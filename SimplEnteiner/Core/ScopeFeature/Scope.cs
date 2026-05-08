@@ -41,7 +41,7 @@ namespace SimplEnteiner.Core.ScopeFeature
         public Scope(ResolverFunc resolver)
         {
             _resolver = resolver.ThrowIfArgumentNull();
-            Parent = null;
+            ParentInternal = null;
             _singletons = new Dictionary<Type, object>();
             _scopedInstances = new Dictionary<Type, object>();
             _childrens = new List<Scope>();
@@ -61,8 +61,8 @@ namespace SimplEnteiner.Core.ScopeFeature
 
         protected Scope(Scope parent)
         {
-            Parent = parent.ThrowIfArgumentNull();
-            _resolver = Parent._resolver;
+            ParentInternal = parent.ThrowIfArgumentNull();
+            _resolver = ParentInternal._resolver;
             _singletons = parent._singletons;
             _scopedInstances = new Dictionary<Type, object>();
             _childrens = new List<Scope>();
@@ -72,18 +72,10 @@ namespace SimplEnteiner.Core.ScopeFeature
             _root = FindRoot();
         }
 
-        private Scope FindRoot()
-        {
-            Scope scope = this;
+        public IScope Parent => ParentInternal;
+        public bool IsRoot => ParentInternal == null;
 
-            while (scope.Parent != null)
-                scope = scope.Parent;
-
-            return scope;
-        }
-
-        public Scope Parent { get; }
-        public bool IsRoot => Parent == null;
+        internal Scope ParentInternal { get; }
 
         public void Dispose()
         {
@@ -106,11 +98,22 @@ namespace SimplEnteiner.Core.ScopeFeature
             }
             else
             {
-                lock (Parent._childrensLock)
-                    Parent._childrens.Remove(this);
+                lock (ParentInternal._childrensLock)
+                    ParentInternal._childrens.Remove(this);
             }
             
             _cleanupService.Dispose();
+        }
+
+        public IScope[] GetChildrens()
+        {
+            return _childrens.ToArray();
+        }
+
+        public void GetChildrens(List<IScope> results)
+        {
+            results.Clear();
+            results.AddRange(_childrens);
         }
 
         public async ValueTask DisposeAsync()
@@ -134,8 +137,8 @@ namespace SimplEnteiner.Core.ScopeFeature
             }
             else
             {
-                lock (Parent._childrensLock)
-                    Parent._childrens.Remove(this);
+                lock (ParentInternal._childrensLock)
+                    ParentInternal._childrens.Remove(this);
             }
 
             await _cleanupService.DisposeAsync();
@@ -273,6 +276,12 @@ namespace SimplEnteiner.Core.ScopeFeature
             _registry.AddDecorator(registration);
         }
 
+        public void Build()
+        {
+            ValidateAll();
+            Start();
+        }
+
         internal void ValidateAll()
         {
             _registry.ValidateAll();
@@ -298,7 +307,7 @@ namespace SimplEnteiner.Core.ScopeFeature
             }
 
             for (int i = 0; i < _childrens.Count; i++)
-                _childrens[i].Start();
+                _childrens[i].Build();
         }
 
         internal void AddRegister(BindingBuilderInternal builder)
@@ -329,7 +338,7 @@ namespace SimplEnteiner.Core.ScopeFeature
         {
             ConditionalKey key = new ConditionalKey(interfaceType, id);
 
-            for (Scope scope = this; scope != null; scope = scope.Parent)
+            for (Scope scope = this; scope != null; scope = scope.ParentInternal)
             {
                 if (scope._registry.ConditionalBindings.TryGetValue(key, out Registration registration))
                     return registration;
@@ -361,7 +370,7 @@ namespace SimplEnteiner.Core.ScopeFeature
             List<DecoratorRegistration> registrations = new List<DecoratorRegistration>();
             List<Scope> scopes = new List<Scope>();
 
-            for (Scope scope = this; scope != null; scope = scope.Parent)
+            for (Scope scope = this; scope != null; scope = scope.ParentInternal)
                 scopes.Add(scope);
 
             AddExactDecoratorRegistrations(interfaceType, registrations, scopes);
@@ -439,6 +448,16 @@ namespace SimplEnteiner.Core.ScopeFeature
                     CreateScope(child);
         }
 
+        private Scope FindRoot()
+        {
+            Scope scope = this;
+
+            while (scope.ParentInternal != null)
+                scope = scope.ParentInternal;
+
+            return scope;
+        }
+
         private (Type Key, Registration Value) DeserializeRegistration(BindingConfig bindingConfig)
         {
             Type type = Type.GetType(bindingConfig.ImplementationType);
@@ -498,7 +517,7 @@ namespace SimplEnteiner.Core.ScopeFeature
             Dictionary<Type, Registration> allRegistrations = new Dictionary<Type, Registration>();
             Stack<Scope> allScopes = new Stack<Scope>();
 
-            for (Scope scope = this; scope != null; scope = scope.Parent)
+            for (Scope scope = this; scope != null; scope = scope.ParentInternal)
                 allScopes.Push(scope);
 
             while (allScopes.Count > 0)
@@ -515,7 +534,7 @@ namespace SimplEnteiner.Core.ScopeFeature
 
         private Registration FindRegistration(Type interfaceType, Func<Scope, IReadOnlyDictionary<Type, Registration>> selector)
         {
-            for (Scope scope = this; scope != null; scope = scope.Parent)
+            for (Scope scope = this; scope != null; scope = scope.ParentInternal)
             {
                 if (selector(scope).TryGetValue(interfaceType, out Registration registration))
                     return registration;
