@@ -2,11 +2,11 @@
 {
     internal class OptionsStage : Stage
     {
-        public OptionsStage(BindingBuilderInternal bindingBuilder, Stage next) : base(bindingBuilder, next, 300)
+        public OptionsStage(BindingBuilder bindingBuilder, Stage next) : base(bindingBuilder, next, 300)
         {
         }
 
-        protected override void OnExecuteBinding(BindingBuilderInternal bindingBuilderInternal)
+        protected override void OnExecuteBinding(BindingBuilder bindingBuilderInternal)
         {
         }
     }

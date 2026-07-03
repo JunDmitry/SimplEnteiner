@@ -1,6 +1,6 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Text.Json;
@@ -14,77 +14,81 @@ using SimplEnteiner.Core.ConventionBinding.Interfaces;
 using SimplEnteiner.Core.InstallerService.Interfaces;
 using SimplEnteiner.Core.Lifecycle;
 using SimplEnteiner.Core.RegistrationService;
+using SimplEnteiner.Core.RepositoryService;
 using SimplEnteiner.Utilities;
 
 namespace SimplEnteiner.Core.ScopeFeature
 {
     public class Scope : IScope, IBindingTarget
     {
-        private readonly ResolverFunc _resolver;
-        private readonly Registry _registry;
+        private readonly ScopeCreationConfig _config;
 
-        private readonly Dictionary<Type, object> _singletons;
+        private readonly IRegistry _registry;
+
+        private readonly IRepositoryService _singletons;
         private readonly object _singletonLock = new object();
 
         private readonly Dictionary<Type, object> _scopedInstances;
         private readonly object _scopedLock = new object();
 
-        private readonly List<Scope> _childrens;
-        private readonly object _childrensLock = new object();
+        private readonly List<IScope> _childrens;
 
         private readonly ICleanupService _cleanupService;
         private readonly IInterfaceInvoker _interfaceInvoker;
 
-        private readonly Scope _root;
+        private readonly IScope _root;
         private bool _disposed;
 
-        public Scope(ResolverFunc resolver)
+        public Scope(Action<ScopeCreationConfig> configure = null)
         {
-            _resolver = resolver.ThrowIfArgumentNull();
-            ParentInternal = null;
-            _singletons = new Dictionary<Type, object>();
+            _config = new ScopeCreationConfig();
+            configure?.Invoke(_config);
+
+            Parent = null;
+            _singletons = _config.SingletonRepository;
             _scopedInstances = new Dictionary<Type, object>();
-            _childrens = new List<Scope>();
+            _childrens = new List<IScope>();
             _cleanupService = new CleanupService();
             _interfaceInvoker = new InterfaceInvoker();
+            _registry = _config.RegistryFactory.CreateRegistry();
         }
 
-        internal Scope(ResolverFunc resolver, ScopeConfig scopeConfig) : this(resolver)
+        internal Scope(Action<ScopeCreationConfig> configure, ScopeConfig scopeConfig) : this(configure)
         {
             InitializeFromDto(scopeConfig);
         }
 
-        internal Scope(Scope parent, ScopeConfig scopeConfig) : this(parent)
+        internal Scope(IScope parent, ScopeConfig scopeConfig, ScopeCreationConfig creationConfig) : this(parent, creationConfig)
         {
             InitializeFromDto(scopeConfig);
         }
 
-        protected Scope(Scope parent)
+        internal Scope(IScope parent, ScopeCreationConfig creationConfig)
         {
-            ParentInternal = parent.ThrowIfArgumentNull();
-            _resolver = ParentInternal._resolver;
-            _singletons = parent._singletons;
+            Parent = parent.ThrowIfArgumentNull();
+            _config = creationConfig;
+            _singletons = creationConfig.SingletonRepository;
             _scopedInstances = new Dictionary<Type, object>();
-            _childrens = new List<Scope>();
+            _childrens = new List<IScope>();
             _cleanupService = new CleanupService();
             _interfaceInvoker = new InterfaceInvoker();
+            _registry = creationConfig.RegistryFactory.CreateRegistry();
 
             _root = FindRoot();
         }
 
-        public IScope Parent => ParentInternal;
-        public bool IsRoot => ParentInternal == null;
-
-        internal Scope ParentInternal { get; }
+        public IScope Parent { get; }
+        public bool IsRoot => Parent == null;
+        public IRegistry Registry => _registry;
 
         public void Dispose()
         {
-            if (_disposed) 
+            if (_disposed)
                 return;
 
             _disposed = true;
 
-            lock(_scopedLock)
+            lock (_scopedLock)
             {
                 _scopedInstances.Clear();
             }
@@ -93,15 +97,15 @@ namespace SimplEnteiner.Core.ScopeFeature
             {
                 lock (_singletons)
                 {
-                    _singletons.Clear();
+                    ((IDictionary)_singletons).Clear();
+                    _singletons.Dispose();
                 }
             }
             else
             {
-                lock (ParentInternal._childrensLock)
-                    ParentInternal._childrens.Remove(this);
+                Parent.RemoveChildren(this);
             }
-            
+
             _cleanupService.Dispose();
         }
 
@@ -132,29 +136,28 @@ namespace SimplEnteiner.Core.ScopeFeature
             {
                 lock (_singletons)
                 {
-                    _singletons.Clear();
+                    ((IDictionary)_singletons).Clear();
                 }
             }
             else
             {
-                lock (ParentInternal._childrensLock)
-                    ParentInternal._childrens.Remove(this);
+                Parent.RemoveChildren(this);
             }
 
             await _cleanupService.DisposeAsync();
         }
 
-        public virtual object Resolve(Type interfaceType)
+        public virtual object Resolve(Type interfaceType) // IResolver
         {
-            return _resolver(interfaceType, this);
+            return _config.Resolver.Resolve(interfaceType, this);
         }
 
-        public virtual T Resolve<T>()
+        public virtual T Resolve<T>() // IResolver
         {
-            return (T) _resolver(typeof(T), this);
+            return (T)_config.Resolver.Resolve(typeof(T), this);
         }
 
-        public virtual async Task<object> ResolveAsync(Type interfaceType)
+        public virtual async Task<object> ResolveAsync(Type interfaceType) // Inner
         {
             object instance = Resolve(interfaceType);
 
@@ -163,22 +166,22 @@ namespace SimplEnteiner.Core.ScopeFeature
             return instance;
         }
 
-        public virtual async Task<T> ResolveAsync<T>()
+        public virtual async Task<T> ResolveAsync<T>() // Inner
         {
-            return (T) await ResolveAsync(typeof(T));
+            return (T)await ResolveAsync(typeof(T));
         }
 
-        public virtual object Resolve(Type interfaceType, object id)
+        public virtual object Resolve(Type interfaceType, object id) // IResolver
         {
-            return _resolver(interfaceType, this, id);
+            return _config.Resolver.Resolve(interfaceType, this, id);
         }
 
-        public virtual T Resolve<T>(object id)
+        public virtual T Resolve<T>(object id) // IResolver
         {
-            return (T)_resolver(typeof(T), this, id);
+            return (T)_config.Resolver.Resolve(typeof(T), this, id);
         }
 
-        public virtual async Task<object> ResolveAsync(Type interfaceType, object id)
+        public virtual async Task<object> ResolveAsync(Type interfaceType, object id) // Inner
         {
             object instance = Resolve(interfaceType, id);
 
@@ -187,14 +190,14 @@ namespace SimplEnteiner.Core.ScopeFeature
             return instance;
         }
 
-        public virtual async Task<T> ResolveAsync<T>(object id)
+        public virtual async Task<T> ResolveAsync<T>(object id) // Inner
         {
             return (T)await ResolveAsync(typeof(T), id);
         }
 
         public virtual IScope CreateScope()
         {
-            Scope child = new Scope(this);
+            IScope child = _config.ScopeFactory.CreateScope(this, _config);
 
             lock (_childrens)
                 _childrens.Add(child);
@@ -202,42 +205,47 @@ namespace SimplEnteiner.Core.ScopeFeature
             return child;
         }
 
-        public virtual void Install(IInstaller installer)
+        public virtual void RemoveChildren(IScope child)
+        {
+            _childrens.Remove(child);
+        }
+
+        public virtual void Install(IInstaller installer) // Inner
         {
             installer.ThrowIfArgumentNull().Install(this);
         }
 
-        public IBindingTo<T> Bind<T>()
+        public IBindingTo<T> Bind<T>() // Inner
         {
-            BindingBuilderInternal builderInternal = new BindingBuilderInternal(typeof(T));
+            BindingBuilder builderInternal = new BindingBuilder(typeof(T));
 
             return new BindingTo<T>(builderInternal, this);
         }
 
-        public IBindingTo Bind(Type interfaceType)
+        public IBindingTo Bind(Type interfaceType) // Inner
         {
             interfaceType.ThrowIfArgumentNull();
-            BindingBuilderInternal builderInternal = new BindingBuilderInternal(interfaceType);
+            BindingBuilder builderInternal = new BindingBuilder(interfaceType);
 
             return new BindingTo(builderInternal, this);
         }
 
-        public IBindingDecorate<TService> Decorate<TService>()
+        public IBindingDecorate<TService> Decorate<TService>() // Inner
         {
-            BindingBuilderInternal builderInternal = new BindingBuilderInternal(typeof(TService));
+            BindingBuilder builderInternal = new BindingBuilder(typeof(TService));
 
             return new BindingDecorate<TService>(builderInternal, this);
         }
 
-        public IBindingDecorate Decorate(Type interfaceType)
+        public IBindingDecorate Decorate(Type interfaceType) // Inner
         {
             interfaceType.ThrowIfArgumentNull();
-            BindingBuilderInternal builderInternal = new BindingBuilderInternal(interfaceType);
+            BindingBuilder builderInternal = new BindingBuilder(interfaceType);
 
             return new BindingDecorate(builderInternal, this);
         }
 
-        public void BindConvention(Action<IConventionBuilder> configure)
+        public void BindConvention(Action<IConventionBuilder> configure) // Inner
         {
             ConventionBuilder builder = new ConventionBuilder(this);
             configure.ThrowIfArgumentNull().Invoke(builder);
@@ -253,7 +261,7 @@ namespace SimplEnteiner.Core.ScopeFeature
                 children.AnalyzeReachability(roots, injectAttribute);
         }
 
-        void IBindingTarget.Register(BindingBuilderInternal bindingBuilder)
+        void IBindingTarget.Register(BindingBuilder bindingBuilder)
         {
             if (bindingBuilder.IsRegistered)
                 return;
@@ -263,7 +271,7 @@ namespace SimplEnteiner.Core.ScopeFeature
             bindingBuilder.MarkRegistered();
         }
 
-        void IBindingTarget.RegisterDecorator(BindingBuilderInternal bindingBuilder)
+        void IBindingTarget.RegisterDecorator(BindingBuilder bindingBuilder)
         {
             Type interfaceType = bindingBuilder.InterfaceType;
             Type decoratorType = bindingBuilder.ImplementationType;
@@ -284,14 +292,14 @@ namespace SimplEnteiner.Core.ScopeFeature
 
         internal void ValidateAll()
         {
-            _registry.ValidateAll();
+            _registry.ValidateAll(); // IRegistry
         }
 
         internal void Start()
         {
             Registration registration;
 
-            foreach (KeyValuePair<Type, Registration> pair in _registry.ExactBindings)
+            foreach (KeyValuePair<Type, Registration> pair in _registry.ExactBindings) // IRegistry
             {
                 registration = pair.Value;
 
@@ -310,37 +318,37 @@ namespace SimplEnteiner.Core.ScopeFeature
                 _childrens[i].Build();
         }
 
-        internal void AddRegister(BindingBuilderInternal builder)
+        internal void AddRegister(BindingBuilder builder)
         {
-            _registry.Add(builder);
+            _registry.Add(builder); // IRegistry
         }
 
         internal IReadOnlyDictionary<Type, Registration> GetAllExactRegistration()
         {
-            return GetAllRegistration(s => s._registry.ExactBindings);
+            return GetAllRegistration(s => s.Registry.ExactBindings); // IRegistry
         }
         internal IReadOnlyDictionary<Type, Registration> GetAllOpenGenericRegistration()
         {
-            return GetAllRegistration(s => s._registry.OpenGenericBindings);
+            return GetAllRegistration(s => s.Registry.OpenGenericBindings); // IRegistry
         }
 
         internal Registration FindExactRegistration(Type interfaceType)
         {
-            return FindRegistration(interfaceType, s => s._registry.ExactBindings);
+            return FindRegistration(interfaceType, s => s.Registry.ExactBindings); // IRegistry
         }
 
         internal Registration FindOpenGenericRegistration(Type interfaceType)
         {
-            return FindRegistration(interfaceType, s => s._registry.OpenGenericBindings);
+            return FindRegistration(interfaceType, s => s.Registry.OpenGenericBindings); // IRegistry
         }
 
         internal Registration FindConditionalRegistration(Type interfaceType, object id)
         {
             ConditionalKey key = new ConditionalKey(interfaceType, id);
 
-            for (Scope scope = this; scope != null; scope = scope.ParentInternal)
+            for (IScope scope = this; scope != null; scope = scope.Parent)
             {
-                if (scope._registry.ConditionalBindings.TryGetValue(key, out Registration registration))
+                if (scope.Registry.ConditionalBindings.TryGetValue(key, out Registration registration)) // IRegistry
                     return registration;
             }
 
@@ -351,7 +359,7 @@ namespace SimplEnteiner.Core.ScopeFeature
         {
             lock (_singletonLock)
             {
-                _singletons.TryGetValue(interfaceType, out object instance);
+                ((IReadOnlyDictionary<Type, object>)_singletons).TryGetValue(interfaceType, out object instance);
                 return instance;
             }
         }
@@ -368,9 +376,9 @@ namespace SimplEnteiner.Core.ScopeFeature
         internal List<DecoratorRegistration> GetDecoratorRegistrations(Type interfaceType)
         {
             List<DecoratorRegistration> registrations = new List<DecoratorRegistration>();
-            List<Scope> scopes = new List<Scope>();
+            List<IScope> scopes = new List<IScope>();
 
-            for (Scope scope = this; scope != null; scope = scope.ParentInternal)
+            for (IScope scope = this; scope != null; scope = scope.Parent)
                 scopes.Add(scope);
 
             AddExactDecoratorRegistrations(interfaceType, registrations, scopes);
@@ -387,8 +395,8 @@ namespace SimplEnteiner.Core.ScopeFeature
         {
             lock (_singletonLock)
             {
-                _singletons[interfaceType] = instance;
-                _root._cleanupService.AddIfDisposable(instance, onRelease);
+                ((Dictionary<Type, object>)_singletons)[interfaceType] = instance;
+                _singletons.AddIfDisposable(instance, onRelease);
             }
         }
 
@@ -411,13 +419,13 @@ namespace SimplEnteiner.Core.ScopeFeature
             foreach (BindingConfig exactBinding in scopeConfig.ExactBindings)
             {
                 (Type key, Registration value) = DeserializeRegistration(exactBinding);
-                _registry.AddExactRegistration(key, value);
+                _registry.AddExactRegistration(key, value); // IRegistry
             }
 
             foreach (BindingConfig openConfig in scopeConfig.OpenGenericBindings)
             {
                 (Type key, Registration value) = DeserializeRegistration(openConfig);
-                _registry.AddOpenGenericRegistration(key, value);
+                _registry.AddOpenGenericRegistration(key, value); // IRegistry
             }
 
             foreach (BindingConfig conditionalConfig in scopeConfig.ConditionalBindings)
@@ -428,7 +436,7 @@ namespace SimplEnteiner.Core.ScopeFeature
                         : Type.GetType(conditionalConfig.Condition))
                     : JsonSerializer.Deserialize<object>(conditionalConfig.Id);
                 (Type key, Registration value) = DeserializeRegistration(conditionalConfig);
-                _registry.AddConditionalRegistration(key, id, value);
+                _registry.AddConditionalRegistration(key, id, value); // IRegistry
             }
 
             foreach (DecoratorConfig decoratorConfig in scopeConfig.DecoratorBindings)
@@ -440,7 +448,7 @@ namespace SimplEnteiner.Core.ScopeFeature
                     Enum.Parse<LifeTime>(decoratorConfig.Lifetime),
                     null,
                     null);
-                _registry.AddDecorator(decoratorRegistration);
+                _registry.AddDecorator(decoratorRegistration); // IRegistry
             }
 
             if (scopeConfig.Childrens.Count > 0)
@@ -448,12 +456,12 @@ namespace SimplEnteiner.Core.ScopeFeature
                     CreateScope(child);
         }
 
-        private Scope FindRoot()
+        private IScope FindRoot()
         {
-            Scope scope = this;
+            IScope scope = this;
 
-            while (scope.ParentInternal != null)
-                scope = scope.ParentInternal;
+            while (scope.Parent != null)
+                scope = scope.Parent;
 
             return scope;
         }
@@ -473,33 +481,33 @@ namespace SimplEnteiner.Core.ScopeFeature
 
         private void CreateScope(ScopeConfig scopeConfig)
         {
-            Scope child = new Scope(this, scopeConfig);
+            Scope child = new Scope(this, scopeConfig, _config);
 
             lock (_childrens)
                 _childrens.Add(child);
         }
 
-        private static void AddExactDecoratorRegistrations(Type interfaceType, List<DecoratorRegistration> registrations, List<Scope> scopes)
+        private static void AddExactDecoratorRegistrations(Type interfaceType, List<DecoratorRegistration> registrations, List<IScope> scopes)
         {
             for (int i = scopes.Count - 1; i >= 0; i--)
             {
-                Scope scope = scopes[i];
+                IScope scope = scopes[i];
 
-                if (scope._registry.DecoratorBindings.TryGetValue(interfaceType, out List<DecoratorRegistration> inner))
+                if (scope.Registry.DecoratorBindings.TryGetValue(interfaceType, out List<DecoratorRegistration> inner)) // IRegistry
                     registrations.AddRange(inner);
             }
         }
 
-        private static void AddGenericDecoratorRegistrations(Type interfaceType, List<DecoratorRegistration> registrations, List<Scope> scopes)
+        private static void AddGenericDecoratorRegistrations(Type interfaceType, List<DecoratorRegistration> registrations, List<IScope> scopes)
         {
             Type openDeginition = interfaceType.GetGenericTypeDefinition();
             Type[] arguments = interfaceType.GetGenericArguments();
 
             for (int i = scopes.Count - 1; i >= 0; i--)
             {
-                Scope scope = scopes[i];
+                IScope scope = scopes[i];
 
-                if (scope._registry.DecoratorBindings.TryGetValue(openDeginition, out List<DecoratorRegistration> inner) == false)
+                if (scope.Registry.DecoratorBindings.TryGetValue(openDeginition, out List<DecoratorRegistration> inner) == false) // IRegistry
                     continue;
 
                 foreach (DecoratorRegistration registration in inner)
@@ -512,12 +520,12 @@ namespace SimplEnteiner.Core.ScopeFeature
             }
         }
 
-        private IReadOnlyDictionary<Type, Registration> GetAllRegistration(Func<Scope, IReadOnlyDictionary<Type, Registration>> selector)
+        private IReadOnlyDictionary<Type, Registration> GetAllRegistration(Func<IScope, IReadOnlyDictionary<Type, Registration>> selector)
         {
             Dictionary<Type, Registration> allRegistrations = new Dictionary<Type, Registration>();
-            Stack<Scope> allScopes = new Stack<Scope>();
+            Stack<IScope> allScopes = new Stack<IScope>();
 
-            for (Scope scope = this; scope != null; scope = scope.ParentInternal)
+            for (IScope scope = this; scope != null; scope = scope.Parent)
                 allScopes.Push(scope);
 
             while (allScopes.Count > 0)
@@ -532,9 +540,9 @@ namespace SimplEnteiner.Core.ScopeFeature
             return allRegistrations;
         }
 
-        private Registration FindRegistration(Type interfaceType, Func<Scope, IReadOnlyDictionary<Type, Registration>> selector)
+        private Registration FindRegistration(Type interfaceType, Func<IScope, IReadOnlyDictionary<Type, Registration>> selector)
         {
-            for (Scope scope = this; scope != null; scope = scope.ParentInternal)
+            for (IScope scope = this; scope != null; scope = scope.Parent)
             {
                 if (selector(scope).TryGetValue(interfaceType, out Registration registration))
                     return registration;

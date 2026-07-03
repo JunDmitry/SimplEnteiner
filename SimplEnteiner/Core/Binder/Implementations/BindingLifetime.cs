@@ -6,10 +6,10 @@ namespace SimplEnteiner.Core.Binder.Implementations
 {
     internal class BindingLifetime<TInterface> : IBindingLifetime<TInterface>
     {
-        private readonly BindingBuilderInternal _bindingBuilderInternal;
+        private readonly BindingBuilder _bindingBuilderInternal;
         private readonly IBindingTarget _container;
 
-        public BindingLifetime(BindingBuilderInternal bindingBuilderInternal, IBindingTarget container)
+        public BindingLifetime(BindingBuilder bindingBuilderInternal, IBindingTarget container)
         {
             _bindingBuilderInternal = bindingBuilderInternal;
             _container = container;
@@ -45,10 +45,10 @@ namespace SimplEnteiner.Core.Binder.Implementations
 
     internal class BindingLifetime : IBindingLifetime
     {
-        private readonly BindingBuilderInternal _bindingBuilderInternal;
+        private readonly BindingBuilder _bindingBuilderInternal;
         private readonly IBindingTarget _container;
 
-        public BindingLifetime(BindingBuilderInternal bindingBuilderInternal, IBindingTarget container)
+        public BindingLifetime(BindingBuilder bindingBuilderInternal, IBindingTarget container)
         {
             _bindingBuilderInternal = bindingBuilderInternal;
             _container = container;

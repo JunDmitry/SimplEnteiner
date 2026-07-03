@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Reflection;
 using System.Text.Json;
 using System.Threading.Tasks;
 using SimplEnteiner.Core.Binder;
@@ -11,6 +10,9 @@ using SimplEnteiner.Core.Configuration;
 using SimplEnteiner.Core.ConventionBinding.Implementations;
 using SimplEnteiner.Core.ConventionBinding.Interfaces;
 using SimplEnteiner.Core.InstallerService.Interfaces;
+using SimplEnteiner.Core.Lifecycle;
+using SimplEnteiner.Core.RegistrationService;
+using SimplEnteiner.Core.RegistrationService.Factory;
 using SimplEnteiner.Core.ResolverService;
 using SimplEnteiner.Core.ScopeFeature;
 using SimplEnteiner.Utilities;
@@ -19,27 +21,31 @@ namespace SimplEnteiner.Core
 {
     public class DIContainer : IScope, IBindingTarget
     {
-        private readonly List<BindingBuilderInternal> _pendingBindings;
+        private readonly List<BindingBuilder> _pendingBindings;
         private readonly IResolver _resolver;
         private readonly Serializer _serializer = new Serializer();
-        
+
         private Scope _rootScope;
 
         public DIContainer()
         {
             _resolver = new Resolver();
-            _pendingBindings = new List<BindingBuilderInternal>();
-            _rootScope = new Scope((t, s, id) => _resolver.Resolve(t, s, id));
+            _pendingBindings = new List<BindingBuilder>();
+            _rootScope = new Scope(ConfigureConfig);
         }
 
         internal DIContainer(ScopeConfig rootScopeConfig)
         {
             _resolver = new Resolver();
-            _pendingBindings = new List<BindingBuilderInternal>();
-            _rootScope = new Scope((t, s, id) => _resolver.Resolve(t, s, id), rootScopeConfig);
+            _pendingBindings = new List<BindingBuilder>();
+            _rootScope = new Scope(ConfigureConfig, rootScopeConfig);
         }
 
         public IScope Parent => _rootScope.Parent;
+
+        public IRegistry Registry => ((IScope)_rootScope).Registry;
+
+        public bool IsRoot => ((IScope)_rootScope).IsRoot;
 
         public TService Resolve<TService>()
         {
@@ -108,7 +114,7 @@ namespace SimplEnteiner.Core
 
         public IBindingTo<TService> Bind<TService>()
         {
-            BindingBuilderInternal bindingBuilder = new BindingBuilderInternal(typeof(TService));
+            BindingBuilder bindingBuilder = new BindingBuilder(typeof(TService));
 
             lock (_pendingBindings)
                 _pendingBindings.Add(bindingBuilder);
@@ -120,7 +126,7 @@ namespace SimplEnteiner.Core
         {
             serviceType.ThrowIfArgumentNull();
 
-            BindingBuilderInternal bindingBuilder = new BindingBuilderInternal(serviceType);
+            BindingBuilder bindingBuilder = new BindingBuilder(serviceType);
 
             lock (_pendingBindings)
                 _pendingBindings.Add(bindingBuilder);
@@ -139,7 +145,7 @@ namespace SimplEnteiner.Core
 
         public IBindingDecorate<TService> Decorate<TService>()
         {
-            BindingBuilderInternal builderInternal = new BindingBuilderInternal(typeof(TService));
+            BindingBuilder builderInternal = new BindingBuilder(typeof(TService));
 
             return new BindingDecorate<TService>(builderInternal, this);
         }
@@ -147,7 +153,7 @@ namespace SimplEnteiner.Core
         public IBindingDecorate Decorate(Type interfaceType)
         {
             interfaceType.ThrowIfArgumentNull();
-            BindingBuilderInternal builderInternal = new BindingBuilderInternal(interfaceType);
+            BindingBuilder builderInternal = new BindingBuilder(interfaceType);
 
             return new BindingDecorate(builderInternal, this);
         }
@@ -174,7 +180,7 @@ namespace SimplEnteiner.Core
             _rootScope?.Dispose();
             _pendingBindings.Clear();
 
-            _rootScope = new Scope((t, s, id) => _resolver.Resolve(t, s, id));
+            _rootScope = new Scope(ConfigureConfig);
             _rootScope.InitializeFromDto(_serializer.DeserializeInternal(jsonConfiguration));
             Build();
         }
@@ -184,7 +190,7 @@ namespace SimplEnteiner.Core
             _rootScope.AnalyzeReachability(roots, injectAttribute);
         }
 
-        void IBindingTarget.Register(BindingBuilderInternal builder)
+        void IBindingTarget.Register(BindingBuilder builder)
         {
             if (RegisterWithoutRemove(builder) == false)
                 return;
@@ -193,19 +199,27 @@ namespace SimplEnteiner.Core
                 _pendingBindings.Remove(builder);
         }
 
-        void IBindingTarget.RegisterDecorator(BindingBuilderInternal bindingBuilder)
+        void IBindingTarget.RegisterDecorator(BindingBuilder bindingBuilder)
         {
             ((IBindingTarget)_rootScope).RegisterDecorator(bindingBuilder);
         }
 
+        private void ConfigureConfig(ScopeCreationConfig config)
+        {
+            config.Resolver = _resolver;
+            config.ScopeFactory = new ScopeFactory.DefaultScopeFactory();
+            config.RegistryFactory = new RegistryFactory();
+            config.SingletonRepository = new RepositoryService.RepositoryService(new CleanupService());
+        }
+
         private void BuildPendings()
         {
-            List<BindingBuilderInternal> pendingBindingsCopy;
+            List<BindingBuilder> pendingBindingsCopy;
 
             lock (_pendingBindings)
                 pendingBindingsCopy = _pendingBindings.ToList();
 
-            foreach (BindingBuilderInternal bindingBuilder in pendingBindingsCopy)
+            foreach (BindingBuilder bindingBuilder in pendingBindingsCopy)
             {
                 RegisterWithoutRemove(bindingBuilder);
             }
@@ -214,7 +228,7 @@ namespace SimplEnteiner.Core
                 _pendingBindings.Clear();
         }
 
-        private bool RegisterWithoutRemove(BindingBuilderInternal builder)
+        private bool RegisterWithoutRemove(BindingBuilder builder)
         {
             if (builder.IsRegistered)
                 return false;
@@ -244,6 +258,11 @@ namespace SimplEnteiner.Core
             {
                 return JsonSerializer.Deserialize<ScopeConfig>(json);
             }
+        }
+
+        public void RemoveChildren(IScope child)
+        {
+            ((IScope)_rootScope).RemoveChildren(child);
         }
     }
 }

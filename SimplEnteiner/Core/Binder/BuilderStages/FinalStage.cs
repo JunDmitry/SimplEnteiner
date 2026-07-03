@@ -2,10 +2,10 @@
 {
     internal class FinalStage : Stage
     {
-        public FinalStage(BindingBuilderInternal bindingBuilder, Stage next) : base(bindingBuilder, next, 1000)
+        public FinalStage(BindingBuilder bindingBuilder, Stage next) : base(bindingBuilder, next, 1000)
         { }
 
-        protected sealed override void OnExecuteBinding(BindingBuilderInternal bindingBuilderInternal)
+        protected sealed override void OnExecuteBinding(BindingBuilder bindingBuilderInternal)
         {
         }
     }

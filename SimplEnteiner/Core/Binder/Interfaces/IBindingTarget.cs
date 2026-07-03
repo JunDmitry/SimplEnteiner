@@ -5,7 +5,7 @@ namespace SimplEnteiner.Core.Binder.Interfaces
 {
     internal interface IBindingTarget
     {
-        void Register(BindingBuilderInternal bindingBuilder);
-        void RegisterDecorator(BindingBuilderInternal bindingBuilder);
+        void Register(BindingBuilder bindingBuilder);
+        void RegisterDecorator(BindingBuilder bindingBuilder);
     }
 }

@@ -6,10 +6,10 @@ namespace SimplEnteiner.Core.Binder.Implementations
 {
     internal class BindingDecorate<TInterface> : IBindingDecorate<TInterface>
     {
-        private readonly BindingBuilderInternal _bindingBuilder;
+        private readonly BindingBuilder _bindingBuilder;
         private readonly IBindingTarget _target;
 
-        public BindingDecorate(BindingBuilderInternal bindingBuilder, IBindingTarget target)
+        public BindingDecorate(BindingBuilder bindingBuilder, IBindingTarget target)
         {
             _bindingBuilder = bindingBuilder;
             _target = target;
@@ -25,10 +25,10 @@ namespace SimplEnteiner.Core.Binder.Implementations
 
     internal class BindingDecorate : IBindingDecorate
     {
-        private readonly BindingBuilderInternal _bindingBuilder;
+        private readonly BindingBuilder _bindingBuilder;
         private readonly IBindingTarget _target;
 
-        public BindingDecorate(BindingBuilderInternal bindingBuilder, IBindingTarget target)
+        public BindingDecorate(BindingBuilder bindingBuilder, IBindingTarget target)
         {
             _bindingBuilder = bindingBuilder;
             _target = target;

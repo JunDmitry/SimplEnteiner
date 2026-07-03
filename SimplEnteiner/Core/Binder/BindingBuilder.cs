@@ -6,11 +6,11 @@ using SimplEnteiner.Utilities;
 
 namespace SimplEnteiner.Core.Binder
 {
-    internal class BindingBuilderInternal
+    public class BindingBuilder
     {
         private readonly BuilderStateMachine _state;
 
-        public BindingBuilderInternal(Type interfaceType)
+        public BindingBuilder(Type interfaceType)
         {
             InterfaceType = interfaceType.ThrowIfArgumentNull();
 

@@ -1,8 +1,8 @@
-﻿using SimplEnteinerTests.TestInfrastructure;
+﻿using SimplEnteiner;
+using SimplEnteinerTests.TestInfrastructure;
 using SimplEnteinerTests.TestTypes.AtributeTypes;
 using SimplEnteinerTests.TestTypes.Classes;
 using SimplEnteinerTests.TestTypes.Interfaces;
-using SimplEnteiner;
 
 namespace SimplEnteinerTests.TypeAnalyzesTests
 {
@@ -13,8 +13,8 @@ namespace SimplEnteinerTests.TypeAnalyzesTests
         {
             // Populate cache
             ResetDomainTypeCache();
-            var type = typeof(OnePublicCtorWithAttribute);
-            var ctor = type.GetInjectableConstructor(typeof(InjectAttribute)); // This populates cache
+            Type type = typeof(OnePublicCtorWithAttribute);
+            System.Reflection.ConstructorInfo? ctor = type.GetInjectableConstructor(typeof(InjectAttribute)); // This populates cache
 
             // Verify cache is not empty
             Assert.False(IsInjectableConstructorsCacheEmpty());
@@ -31,7 +31,7 @@ namespace SimplEnteinerTests.TypeAnalyzesTests
         {
             // Populate cache
             ResetDomainTypeCache();
-            var type = typeof(ISimpleService);
+            Type type = typeof(ISimpleService);
             _ = type.FindAllAssignableFrom(); // This populates cache
 
             // Verify cache is not empty
@@ -49,7 +49,7 @@ namespace SimplEnteinerTests.TypeAnalyzesTests
         {
             // Populate cache
             ResetDomainTypeCache();
-            var type = typeof(ISimpleService);
+            Type type = typeof(ISimpleService);
             _ = type.FindAllAssignableFrom(); // This populates cache
 
             // Clear cache
@@ -64,7 +64,7 @@ namespace SimplEnteinerTests.TypeAnalyzesTests
         {
             // Populate cache
             ResetDomainTypeCache();
-            var type = typeof(ISimpleService);
+            Type type = typeof(ISimpleService);
             _ = type.FindAllAssignableFrom(); // This populates cache
 
             // Clear cache

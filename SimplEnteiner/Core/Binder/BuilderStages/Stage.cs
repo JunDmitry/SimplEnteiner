@@ -2,9 +2,9 @@
 {
     internal abstract class Stage
     {
-        private readonly BindingBuilderInternal _bindingBuilder;
+        private readonly BindingBuilder _bindingBuilder;
 
-        protected Stage(BindingBuilderInternal bindingBuilder, Stage next, int id)
+        protected Stage(BindingBuilder bindingBuilder, Stage next, int id)
         {
             _bindingBuilder = bindingBuilder;
             Next = next;
@@ -19,6 +19,6 @@
             OnExecuteBinding(_bindingBuilder);
         }
 
-        protected abstract void OnExecuteBinding(BindingBuilderInternal bindingBuilderInternal); 
+        protected abstract void OnExecuteBinding(BindingBuilder bindingBuilderInternal); 
     }
 }

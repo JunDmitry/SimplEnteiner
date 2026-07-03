@@ -3,7 +3,7 @@ using SimplEnteiner.Core.Lifecycle;
 
 namespace SimplEnteiner.Core.RegistrationService
 {
-    internal class Registration
+    public class Registration
     {
         public Registration(Type implementation, LifeTime lifetime, Func<object[], object> factory, object instance, object[] arguments = null)
         {

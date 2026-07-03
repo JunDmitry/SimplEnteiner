@@ -4,11 +4,11 @@ namespace SimplEnteiner.Core.Binder.BuilderStages
 {
     internal class LifetimeStage : Stage
     {
-        public LifetimeStage(BindingBuilderInternal bindingBuilder, Stage next) : base(bindingBuilder, next, 200)
+        public LifetimeStage(BindingBuilder bindingBuilder, Stage next) : base(bindingBuilder, next, 200)
         {
         }
 
-        protected override void OnExecuteBinding(BindingBuilderInternal bindingBuilderInternal)
+        protected override void OnExecuteBinding(BindingBuilder bindingBuilderInternal)
         {
             bindingBuilderInternal.SetLifetime(LifeTime.Transient);
         }

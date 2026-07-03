@@ -10,7 +10,7 @@ using SimplEnteiner.Utilities;
 
 namespace SimplEnteiner.Core.RegistrationService
 {
-    internal class Registry
+    internal class Registry : IRegistry
     {
         private readonly Dictionary<Type, Registration> _exactBindings;
         private readonly Dictionary<Type, Registration> _openGenericBindings;
@@ -54,7 +54,7 @@ namespace SimplEnteiner.Core.RegistrationService
                 throw new InvalidOperationException(message);
         }
 
-        internal void Add(BindingBuilderInternal builder)
+        public void Add(BindingBuilder builder)
         {
             Validate(builder);
 
@@ -78,22 +78,22 @@ namespace SimplEnteiner.Core.RegistrationService
             //    throw new InvalidOperationException($"Cannot resolve all dependencies of {builder.InterfaceType} with current registrations.");
         }
 
-        internal void AddExactRegistration(Type interfaceType, Registration registration)
+        public void AddExactRegistration(Type interfaceType, Registration registration)
         {
             _exactBindings[interfaceType] = registration;
         }
 
-        internal void AddOpenGenericRegistration(Type interfaceType, Registration registration)
+        public void AddOpenGenericRegistration(Type interfaceType, Registration registration)
         {
             _openGenericBindings[interfaceType] = registration;
         }
 
-        internal void AddConditionalRegistration(Type interfaceType, object id, Registration registration)
+        public void AddConditionalRegistration(Type interfaceType, object id, Registration registration)
         {
             _conditionalBindings[(interfaceType, id)] = registration;
         }
 
-        internal void AddDecorator(DecoratorRegistration decoratorRegistration)
+        public void AddDecorator(DecoratorRegistration decoratorRegistration)
         {
             ValidateDecorator(decoratorRegistration);
 
@@ -106,24 +106,24 @@ namespace SimplEnteiner.Core.RegistrationService
             }
 
             decoratorRegistration.Order ??= decorators.Count == 0 ? 0 : decorators[^1].Order + 1;
-            
+
             int insertIndex = decorators.FindBinaryIndexMoreThan(decoratorRegistration, d => d.Order.Value);
             decorators.Insert(insertIndex, decoratorRegistration);
         }
 
-        internal bool CanResolveGeneric(Type interfaceType)
+        public bool CanResolveGeneric(Type interfaceType)
         {
             return _exactBindings.ContainsKey(interfaceType)
                 || (interfaceType.IsGenericType && (interfaceType.IsGenericTypeDefinition == false)
                     && _openGenericBindings.ContainsKey(interfaceType.GetGenericTypeDefinition()));
         }
 
-        internal bool CanResolveAllDependencies(Type type, Type injectAttribute)
+        public bool CanResolveAllDependencies(Type type, Type injectAttribute)
         {
             return type.CanResolveAllDependencies(injectAttribute, _exactBindings, b => b.Implementation);
         }
 
-        internal void ValidateAll()
+        public void ValidateAll()
         {
             Type injectAttribute = Constants.InjectAttributeType;
 
@@ -140,12 +140,12 @@ namespace SimplEnteiner.Core.RegistrationService
                 if (implementation.IsConcreteClass(isIgnoreGeneratedType: true) == false)
                     throw new InvalidOperationException($"Open generic implementation {implementation} for {pair.Key} is not a concrete class.");
 
-                ConstructorInfo ctor = implementation.GetInjectableConstructor(injectAttribute) 
+                ConstructorInfo ctor = implementation.GetInjectableConstructor(injectAttribute)
                     ?? throw new InvalidOperationException($"Open generic implementation {implementation} has no injectable constructor.");
             }
         }
 
-        private void Validate(BindingBuilderInternal builder)
+        private void Validate(BindingBuilder builder)
         {
             Type injectAttribute = Constants.InjectAttributeType;
             Type interfaceType = builder.InterfaceType;
@@ -182,7 +182,6 @@ namespace SimplEnteiner.Core.RegistrationService
 
                 ValidateSecondStep(interfaceType, decoratorType);
             }
-
         }
 
         private static void ValidateFirstStep(Type interfaceType, Type implementationType)
@@ -210,13 +209,12 @@ namespace SimplEnteiner.Core.RegistrationService
 
         private static bool IsCompatible(Type interfaceType, Type implementationType)
         {
-            if (interfaceType.IsGenericTypeDefinition)
-                return implementationType.IsAssignableToGenericTypeDefinition(interfaceType);
-
-            return interfaceType.IsAssignableFrom(implementationType);
+            return interfaceType.IsGenericTypeDefinition
+                ? implementationType.IsAssignableToGenericTypeDefinition(interfaceType)
+                : interfaceType.IsAssignableFrom(implementationType);
         }
 
-        private Registration CreateRegistration(BindingBuilderInternal builder)
+        private Registration CreateRegistration(BindingBuilder builder)
         {
             Type implementationType = builder.ImplementationType ?? builder.InterfaceType;
             ConstructorInfo constructor = implementationType.GetInjectableConstructor(Constants.InjectAttributeType);

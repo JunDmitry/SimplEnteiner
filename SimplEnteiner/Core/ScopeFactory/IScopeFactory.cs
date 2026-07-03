@@ -1,10 +1,9 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
+﻿using SimplEnteiner.Core.ScopeFeature;
 
 namespace SimplEnteiner.Core.ScopeFactory
 {
-    internal interface IScopeFactory
+    public interface IScopeFactory
     {
+        IScope CreateScope(IScope parent, ScopeCreationConfig creationConfig);
     }
 }

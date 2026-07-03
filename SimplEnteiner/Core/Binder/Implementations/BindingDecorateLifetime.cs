@@ -6,10 +6,10 @@ namespace SimplEnteiner.Core.Binder.Implementations
 {
     internal class BindingDecorateLifetime<TInterface> : IBindingDecorateLifetime<TInterface>
     {
-        private readonly BindingBuilderInternal _bindingBuilderInternal;
+        private readonly BindingBuilder _bindingBuilderInternal;
         private readonly IBindingTarget _target;
 
-        public BindingDecorateLifetime(BindingBuilderInternal bindingBuilderInternal, IBindingTarget target)
+        public BindingDecorateLifetime(BindingBuilder bindingBuilderInternal, IBindingTarget target)
         {
             _bindingBuilderInternal = bindingBuilderInternal;
             _target = target;
@@ -49,10 +49,10 @@ namespace SimplEnteiner.Core.Binder.Implementations
 
     internal class BindingDecorateLifetime : IBindingDecorateLifetime
     {
-        private readonly BindingBuilderInternal _bindingBuilderInternal;
+        private readonly BindingBuilder _bindingBuilderInternal;
         private readonly IBindingTarget _target;
 
-        public BindingDecorateLifetime(BindingBuilderInternal bindingBuilderInternal, IBindingTarget target)
+        public BindingDecorateLifetime(BindingBuilder bindingBuilderInternal, IBindingTarget target)
         {
             _bindingBuilderInternal = bindingBuilderInternal;
             _target = target;

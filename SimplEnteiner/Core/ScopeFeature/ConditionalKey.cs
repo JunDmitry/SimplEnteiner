@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 namespace SimplEnteiner.Core.ScopeFeature
 {
-    internal struct ConditionalKey
+    public struct ConditionalKey
     {
         public Type interfaceType;
         public object id;

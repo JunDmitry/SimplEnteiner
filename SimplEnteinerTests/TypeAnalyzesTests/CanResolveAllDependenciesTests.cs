@@ -63,7 +63,7 @@ namespace SimplEnteinerTests.TypeAnalyzesTests
         {
             ResetDomainTypeCache();
 
-            var result = typeof(ConcreteNoDependencies).CanResolveAllDependencies(
+            bool result = typeof(ConcreteNoDependencies).CanResolveAllDependencies(
                 typeof(InjectAttribute),
                 new Dictionary<Type, Type>(),
                     t => t);
@@ -76,7 +76,7 @@ namespace SimplEnteinerTests.TypeAnalyzesTests
         {
             ResetDomainTypeCache();
 
-            var result = typeof(ConcreteWithConcreteDependency).CanResolveAllDependencies(
+            bool result = typeof(ConcreteWithConcreteDependency).CanResolveAllDependencies(
                 typeof(InjectAttribute),
                 new Dictionary<Type, Type>(),
                     t => t);
@@ -89,7 +89,7 @@ namespace SimplEnteinerTests.TypeAnalyzesTests
         {
             ResetDomainTypeCache();
 
-            var result = typeof(ConcreteWithUnregisteredInterfaceDependency).CanResolveAllDependencies(
+            bool result = typeof(ConcreteWithUnregisteredInterfaceDependency).CanResolveAllDependencies(
                 typeof(InjectAttribute),
                 new Dictionary<Type, Type>(),
                     t => t);
@@ -102,12 +102,12 @@ namespace SimplEnteinerTests.TypeAnalyzesTests
         {
             ResetDomainTypeCache();
 
-            var registry = new Dictionary<Type, Type>
+            Dictionary<Type, Type> registry = new Dictionary<Type, Type>
             {
                 { typeof(ISimpleService), typeof(SimpleService) }
             };
 
-            var result = typeof(ConcreteWithRegisteredInterfaceDependency).CanResolveAllDependencies(
+            bool result = typeof(ConcreteWithRegisteredInterfaceDependency).CanResolveAllDependencies(
                 typeof(InjectAttribute),
                 registry,
                     t => t);
@@ -120,12 +120,12 @@ namespace SimplEnteinerTests.TypeAnalyzesTests
         {
             ResetDomainTypeCache();
 
-            var registry = new Dictionary<Type, Type>
+            Dictionary<Type, Type> registry = new Dictionary<Type, Type>
             {
                 { typeof(ISimpleService), typeof(SimpleService) }
             };
 
-            var result = typeof(ConcreteWithMultipleDependencies).CanResolveAllDependencies(
+            bool result = typeof(ConcreteWithMultipleDependencies).CanResolveAllDependencies(
                 typeof(InjectAttribute),
                 registry,
                     t => t);
@@ -138,7 +138,7 @@ namespace SimplEnteinerTests.TypeAnalyzesTests
         {
             ResetDomainTypeCache();
 
-            var result = typeof(ConcreteWithMultipleDependencies).CanResolveAllDependencies(
+            bool result = typeof(ConcreteWithMultipleDependencies).CanResolveAllDependencies(
                 typeof(InjectAttribute),
                 new Dictionary<Type, Type>(),
                     t => t);
@@ -156,11 +156,11 @@ namespace SimplEnteinerTests.TypeAnalyzesTests
             // Resolver maps ISimpleService to a concrete type
             Func<Type, Type> resolver = t => t == typeof(ISimpleService) ? typeof(SimpleService) : t;
 
-            var result = typeof(ConcreteWithUnregisteredInterfaceDependency).CanResolveAllDependencies(
+            bool result = typeof(ConcreteWithUnregisteredInterfaceDependency).CanResolveAllDependencies(
                 typeof(InjectAttribute),
                 new Dictionary<Type, Type>(),
-                resolver,
-                t => t);
+                t => t,
+                resolver);
 
             // With resolver, ISimpleService maps to SimpleService (concrete)
             // But SimpleService is not in registry, so it should still be false
@@ -174,7 +174,7 @@ namespace SimplEnteinerTests.TypeAnalyzesTests
         {
             ResetDomainTypeCache();
 
-            var result = typeof(ConcreteFromAbstractWithDependency).CanResolveAllDependencies(
+            bool result = typeof(ConcreteFromAbstractWithDependency).CanResolveAllDependencies(
                 typeof(InjectAttribute),
                 new Dictionary<Type, Type>(),
                 t => t);

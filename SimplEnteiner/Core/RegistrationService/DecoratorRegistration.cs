@@ -4,7 +4,7 @@ using SimplEnteiner.Core.Lifecycle;
 
 namespace SimplEnteiner.Core.RegistrationService
 {
-    internal class DecoratorRegistration
+    public class DecoratorRegistration
     {
         public DecoratorRegistration(Type interfaceType, Type decoratorType, int? order, LifeTime lifetime, ConstructorInfo constructor, Func<object[], object> factory)
         {
