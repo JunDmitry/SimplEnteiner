@@ -1,2 +1,2 @@
 # SimplEnteiner
-A small DI framework
+[Documentation page](https://jundmitry.github.io/SimplEnteiner/)
