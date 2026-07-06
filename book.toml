@@ -9,7 +9,7 @@ default-theme = "light"
 preferred-dark-theme = "navy"
 git-repository-url = "https://github.com/JunDmitry/SimplEnteiner"
 edit-url-template = "https://github.com/JunDmitry/SimplEnteiner/edit/main/src/{path}"
-additional-js = ["mermaid-init.js"]
+additional-js = ["theme/mermaid_init.js"]
 
 [output.html.search]
 limit-results = 30
