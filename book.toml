@@ -1,0 +1,17 @@
+[book]
+title = "SimplEnteiner"
+authors = ["Dmitry Rysev"]
+language = "en"
+src = "src"
+
+[output.html]
+default-theme = "light"
+preferred-dark-theme = "navy"
+git-repository-url = "https://github.com/JunDmitry/SimplEnteiner"
+edit-url-template = "https://github.com/JunDmitry/SimplEnteiner/edit/main/src/{path}"
+additional-js = ["mermaid-init.js"]
+
+[output.html.search]
+limit-results = 30
+
+[preprocessor.links]
