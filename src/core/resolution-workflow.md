@@ -61,7 +61,7 @@ flowchart TD
     Func --> Decorators
     ReturnExisting --> Decorators
     ReturnNew --> Decorators
-    Decorators["ResolveDecorators(instance, interfaceType, context)"] --> Final[Return final (possibly decorated) instance]
+    Decorators["ResolveDecorators(instance, interfaceType, context)"] --> Final["Return final (possibly decorated) instance"]
 ```
 
 ## Registration Lookup Priority
