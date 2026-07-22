@@ -15,9 +15,11 @@ A small, self-contained Dependency Injection (DI) framework for .NET, designed w
 ## Quick start
 
 ```csharp
+// DIContainer is an internal name.
 DIContainer container = new DIContainer();
 
 // ---Bindings---
+// Explicit separation of registration and resolve stages
 container.Bind<IService>().To<Service>().AsSingle();
 container.Bind<IScopedService>().To<ScopedService>().AsScoped();
 // --------------
@@ -30,9 +32,9 @@ IService service = container.ResolverProvider.Resolve<IService>();
 ## Documentation and resources
 
 📖 [Full documentation, examples, and API reference](https://jundmitry.github.io/SimplEnteiner/)\
-📄 [Licence](https://github.com/JunDmitry/SimplEnteiner/blob/main/LICENSE)
+📄 [License](https://github.com/JunDmitry/SimplEnteiner/blob/main/LICENSE)
 
 ## Status
 
 ⚠️ Actively developed (Beta).
-- AOT support (in development)
+- AOT support (important for Unity IL2CPP and native publishing).
