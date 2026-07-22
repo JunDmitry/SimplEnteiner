@@ -19,7 +19,7 @@ DIContainer container = new DIContainer();
 
 // ---Bindings---
 container.Bind<IService>().To<Service>().AsSingle();
-container.Bind<IScopedService>().To<ScopedService>().AsTransient();
+container.Bind<IScopedService>().To<ScopedService>().AsScoped();
 // --------------
 
 container.Build();
