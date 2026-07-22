@@ -35,3 +35,4 @@ IService service = container.ResolverProvider.Resolve<IService>();
 ## Status
 
 ⚠️ Actively developed (Beta).
+- AOT support (in development)
