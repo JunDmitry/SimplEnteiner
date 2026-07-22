@@ -24,6 +24,7 @@ container.Bind<IService>().To<Service>().AsSingle();
 container.Bind<IScopedService>().To<ScopedService>().AsScoped();
 // --------------
 
+// Required for building and validating a dependency graph.
 container.Build();
 
 IService service = container.ResolverProvider.Resolve<IService>();
